@@ -9,25 +9,27 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --cream: #F5F0E8;
-      --cream-dark: #EDE6D6;
-      --ink: #1A1A1A;
-      --ink-light: #4A4A4A;
-      --ink-muted: #8A8A8A;
-      --forest: #1C4532;
-      --forest-mid: #276146;
+      --cream:       #F5F0E8;
+      --cream-dark:  #EDE6D6;
+      --ink:         #1A1A1A;
+      --ink-light:   #4A4A4A;
+      --ink-muted:   #8A8A8A;
+      --forest:      #1C4532;
+      --forest-mid:  #276146;
       --forest-light:#3A8C62;
-      --terra: #C85B3A;
+      --terra:       #C85B3A;
       --terra-light: #E8745A;
-      --gold: #C9922A;
-      --white: #FFFFFF;
-      --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
-      --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
-      --radius: 10px;
-      --radius-lg: 16px;
+      --gold:        #C9922A;
+      --white:       #FFFFFF;
+      --shadow-sm:   0 1px 4px rgba(0,0,0,0.08);
+      --shadow-md:   0 4px 16px rgba(0,0,0,0.10);
+      --shadow-lg:   0 8px 32px rgba(0,0,0,0.12);
+      --radius:      10px;
+      --radius-lg:   16px;
     }
+
     body {
       background: var(--cream);
       color: var(--ink);
@@ -35,6 +37,8 @@
       min-height: 100vh;
       padding: 0 0 60px;
     }
+
+    /* ─── BACKGROUND TEXTURE ─────────────────────── */
     body::before {
       content: '';
       position: fixed; inset: 0;
@@ -43,6 +47,8 @@
         radial-gradient(circle at 80% 80%, rgba(200,91,58,0.04) 0%, transparent 60%);
       pointer-events: none; z-index: 0;
     }
+
+    /* ─── HEADER ─────────────────────────────────── */
     header {
       background: var(--forest);
       color: var(--white);
@@ -93,6 +99,8 @@
     }
     #currency option { background: var(--forest); }
     #currency:hover { background: rgba(255,255,255,0.2); }
+
+    /* ─── METRICS STRIP ──────────────────────────── */
     .metrics-strip {
       background: var(--forest-mid);
       padding: 12px 24px;
@@ -122,11 +130,15 @@
     }
     .metric-card.accent .metric-value { color: #7ED4A4; }
     .metric-card.terra .metric-value { color: #F5A082; }
+
+    /* ─── MAIN CONTENT ───────────────────────────── */
     main {
       max-width: 640px; margin: 0 auto;
       padding: 24px 20px 0;
       position: relative; z-index: 1;
     }
+
+    /* ─── FORM CARD ──────────────────────────────── */
     .form-card {
       background: var(--white);
       border-radius: var(--radius-lg);
@@ -143,10 +155,13 @@
       display: flex; align-items: center; gap: 8px;
     }
     .form-card h2 i { font-size: 0.85rem; opacity: 0.6; }
+
     .form-row {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 12px; margin-bottom: 12px;
     }
+    .form-full { margin-bottom: 12px; }
+
     .field-wrap { display: flex; flex-direction: column; gap: 5px; }
     .field-wrap label {
       font-family: 'DM Mono', monospace;
@@ -175,6 +190,7 @@
       background: var(--white);
     }
     .field-wrap input[type="number"] { font-size: 0.9rem; }
+
     .payment-group {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 10px; margin-bottom: 16px;
@@ -200,6 +216,7 @@
       color: var(--white);
       box-shadow: 0 2px 8px rgba(28,69,50,0.2);
     }
+
     .submit-btn {
       width: 100%;
       padding: 12px;
@@ -221,6 +238,8 @@
       box-shadow: 0 4px 16px rgba(28,69,50,0.25);
     }
     .submit-btn:active { transform: scale(0.99); }
+
+    /* ─── ENTRIES SECTION ────────────────────────── */
     .entries-header {
       display: flex; align-items: center;
       justify-content: space-between;
@@ -239,6 +258,8 @@
       padding: 3px 8px; border-radius: 20px;
       letter-spacing: 0.06em;
     }
+
+    /* ─── DATE GROUP ─────────────────────────────── */
     .date-group { margin-bottom: 20px; }
     .date-group-label {
       font-family: 'DM Mono', monospace;
@@ -256,6 +277,8 @@
       height: 1px;
       background: var(--cream-dark);
     }
+
+    /* ─── ENTRY ITEM ─────────────────────────────── */
     .entry-item {
       background: var(--white);
       border-radius: var(--radius);
@@ -271,12 +294,13 @@
     }
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+      to   { opacity: 1; transform: translateY(0); }
     }
     .entry-item:hover {
       box-shadow: var(--shadow-md);
       transform: translateY(-1px);
     }
+
     .pay-badge {
       width: 34px; height: 34px;
       border-radius: 8px;
@@ -293,6 +317,7 @@
       background: rgba(28,69,50,0.1);
       color: var(--forest);
     }
+
     .entry-body { flex: 1; min-width: 0; }
     .entry-desc {
       font-size: 0.88rem;
@@ -308,6 +333,7 @@
       color: var(--ink-muted);
       margin-top: 2px;
     }
+
     .entry-amount {
       font-family: 'DM Mono', monospace;
       font-size: 0.92rem;
@@ -315,6 +341,7 @@
       color: var(--terra);
       flex-shrink: 0;
     }
+
     .delete-btn {
       width: 28px; height: 28px;
       border: none; background: none;
@@ -333,6 +360,8 @@
       background: #FEE2E2;
       color: #DC2626;
     }
+
+    /* ─── INLINE EDITING ─────────────────────────── */
     .editable-field {
       cursor: text;
       border-radius: 4px;
@@ -350,6 +379,7 @@
       background: var(--white);
       box-shadow: 0 0 0 3px rgba(58,140,98,0.12);
     }
+    /* Special: amount field */
     .editable-amount {
       color: var(--terra);
       font-family: 'DM Mono', monospace;
@@ -358,11 +388,13 @@
       min-width: 48px;
       text-align: right;
     }
+    /* Special: time field */
     .editable-time {
       font-family: 'DM Mono', monospace;
       font-size: 0.65rem;
       color: var(--ink-muted);
     }
+    /* Edit pencil hint */
     .edit-hint {
       font-size: 0.52rem;
       color: var(--forest-light);
@@ -372,6 +404,126 @@
       vertical-align: middle;
     }
     .entry-item:hover .edit-hint { opacity: 0.6; }
+
+    /* ─── FILTER BAR ─────────────────────────────── */
+    .filter-bar {
+      display: flex; gap: 8px;
+      margin-bottom: 16px;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--cream-dark);
+      background: var(--white);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover { border-color: var(--forest-light); color: var(--forest); }
+    .filter-btn.active-all {
+      background: var(--forest);
+      border-color: var(--forest);
+      color: var(--white);
+    }
+    .filter-btn.active-cash {
+      background: rgba(201,146,42,0.12);
+      border-color: var(--gold);
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .filter-btn.active-upi {
+      background: rgba(28,69,50,0.1);
+      border-color: var(--forest);
+      color: var(--forest);
+      font-weight: 700;
+    }
+    .filter-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-all  { background: var(--white); border: 1.5px solid rgba(255,255,255,0.6); }
+    .dot-cash { background: var(--gold); }
+    .dot-upi  { background: var(--forest-light); }
+
+    /* ─── FILTER SUMMARY PANEL ───────────────────── */
+    .filter-summary {
+      display: none;
+      margin-top: 24px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      animation: slideIn 0.3s ease;
+    }
+    .filter-summary.visible { display: block; }
+
+    .fs-header {
+      padding: 14px 20px 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .fs-header.cash-theme { background: var(--gold); }
+    .fs-header.upi-theme  { background: var(--forest); }
+
+    .fs-icon {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; color: var(--white); flex-shrink: 0;
+    }
+    .fs-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--white);
+    }
+    .fs-subtitle {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .fs-body {
+      background: var(--white);
+      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    .fs-stat {
+      text-align: center;
+      padding: 8px 4px;
+    }
+    .fs-stat + .fs-stat {
+      border-left: 1px solid var(--cream-dark);
+    }
+    .fs-stat-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .fs-stat-value.highlight-cash { color: var(--gold); }
+    .fs-stat-value.highlight-upi  { color: var(--forest); }
+    .fs-stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-top: 3px;
+    }
+
+    /* ─── EMPTY STATE ────────────────────────────── */
     .empty-state {
       text-align: center;
       padding: 48px 24px;
@@ -393,6 +545,8 @@
       color: var(--ink-muted);
       opacity: 0.6;
     }
+
+    /* ─── TOAST ──────────────────────────────────── */
     #toast {
       position: fixed; bottom: 28px; left: 50%;
       transform: translateX(-50%) translateY(12px);
@@ -413,7 +567,9 @@
       transform: translateX(-50%) translateY(0);
     }
     #toast.success { background: var(--forest); }
-    #toast.error { background: var(--terra); }
+    #toast.error   { background: var(--terra); }
+
+    /* ─── RESPONSIVE ─────────────────────────────── */
     @media (max-width: 480px) {
       .form-row { grid-template-columns: 1fr; }
       .metrics-inner { grid-template-columns: 1fr 1fr 1fr; }
@@ -422,11 +578,12 @@
   </style>
 </head>
 <body>
+
   <!-- ─── HEADER ───────────────────────────────────── -->
   <header>
     <div class="header-inner">
       <div class="brand">
-        <h1>Spend Ledger <span id="userGreeting"></span></h1>
+        <h1>Spend Ledger</h1>
         <p>Daily Tracking</p>
       </div>
       <div class="currency-wrap">
@@ -439,6 +596,7 @@
       </div>
     </div>
   </header>
+
   <!-- ─── METRICS STRIP ───────────────────────────── -->
   <div class="metrics-strip">
     <div class="metrics-inner">
@@ -456,11 +614,14 @@
       </div>
     </div>
   </div>
+
   <!-- ─── MAIN ─────────────────────────────────────── -->
   <main>
+
     <!-- ADD ENTRY FORM -->
     <div class="form-card">
       <h2><i class="fa fa-plus-circle"></i> New Entry</h2>
+
       <div class="form-row">
         <div class="field-wrap">
           <label>Date</label>
@@ -471,6 +632,7 @@
           <input type="time" id="time" required>
         </div>
       </div>
+
       <div class="form-row">
         <div class="field-wrap">
           <label>Amount</label>
@@ -481,6 +643,7 @@
           <input type="text" id="description" placeholder="What was this for?" required>
         </div>
       </div>
+
       <div class="field-wrap" style="margin-bottom:16px;">
         <label>Payment Type</label>
         <div class="payment-group">
@@ -492,28 +655,81 @@
           </button>
         </div>
       </div>
+
       <button class="submit-btn" onclick="addEntry()">
         <i class="fa fa-check"></i> Record Spend
       </button>
     </div>
+
     <!-- ENTRIES LIST -->
     <div class="entries-header">
       <h2>All Entries</h2>
       <span class="entry-count" id="entryCount">0 entries</span>
     </div>
+
+    <!-- FILTER BAR -->
+    <div class="filter-bar">
+      <button class="filter-btn active-all" id="fAll"  onclick="setFilter('all')">
+        <span class="filter-dot dot-all"></span> All
+      </button>
+      <button class="filter-btn" id="fCash" onclick="setFilter('cash')">
+        <span class="filter-dot dot-cash"></span> Cash
+      </button>
+      <button class="filter-btn" id="fUpi"  onclick="setFilter('upi')">
+        <span class="filter-dot dot-upi"></span> UPI
+      </button>
+    </div>
+
     <div id="entriesList"></div>
+
+    <!-- FILTER SUMMARY PANEL -->
+    <div class="filter-summary" id="filterSummary">
+      <div class="fs-header" id="fsSummaryHeader">
+        <div class="fs-icon" id="fsSummaryIcon"></div>
+        <div>
+          <div class="fs-title" id="fsSummaryTitle"></div>
+          <div class="fs-subtitle">All-time summary</div>
+        </div>
+      </div>
+      <div class="fs-body">
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsSummaryTotal"></div>
+          <div class="fs-stat-label">Total Spent</div>
+        </div>
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsSummaryCount"></div>
+          <div class="fs-stat-label">Transactions</div>
+        </div>
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsSummaryAvg"></div>
+          <div class="fs-stat-label">Avg per txn</div>
+        </div>
+      </div>
+    </div>
+
   </main>
+
   <div id="toast"></div>
 
   <script>
     // ─── STATE ───────────────────────────────────────
     let entries = [];
     let selectedPayment = '';
-    let username = '';
+    let activeFilter = 'all';
+
+    // ─── FILTER ───────────────────────────────────────
+    function setFilter(type) {
+      activeFilter = type;
+      document.getElementById('fAll').className  = 'filter-btn' + (type === 'all'  ? ' active-all'  : '');
+      document.getElementById('fCash').className = 'filter-btn' + (type === 'cash' ? ' active-cash' : '');
+      document.getElementById('fUpi').className  = 'filter-btn' + (type === 'upi'  ? ' active-upi'  : '');
+      render();
+    }
 
     function getLocale(currency) {
       return { INR: 'en-IN', EUR: 'de-DE', USD: 'en-US' }[currency] || 'en-US';
     }
+
     function fmt(amount, currency) {
       return new Intl.NumberFormat(getLocale(currency), {
         style: 'currency', currency,
@@ -528,25 +744,11 @@
       document.getElementById('btnUpi').classList.toggle('active', type === 'upi');
     }
 
-    // ─── USERNAME CAPTURE & PERSONALISATION ───────────
-    function loadUsername() {
-      username = localStorage.getItem('username');
-      if (!username) {
-        username = prompt('Hello! What’s your name? We’ll use it to make your ledger feel personal.');
-        if (username && username.trim()) {
-          localStorage.setItem('username', username.trim());
-        } else {
-          username = 'Friend'; // graceful fallback
-        }
-      }
-      // Update header greeting
-      document.getElementById('userGreeting').textContent = username ? `for ${username}` : '';
-    }
-
     // ─── INIT ─────────────────────────────────────────
     function init() {
       const savedCurrency = localStorage.getItem('currency') || 'INR';
       document.getElementById('currency').value = savedCurrency;
+
       const saved = localStorage.getItem('spends');
       if (saved) {
         try {
@@ -558,7 +760,6 @@
           }));
         } catch(e) { entries = []; }
       }
-      loadUsername();
       setDateTime();
       render();
     }
@@ -577,18 +778,21 @@
 
     // ─── ADD ──────────────────────────────────────────
     function addEntry() {
-      const date = document.getElementById('date').value;
-      const time = document.getElementById('time').value;
+      const date   = document.getElementById('date').value;
+      const time   = document.getElementById('time').value;
       const amount = parseFloat(document.getElementById('amount').value);
-      const desc = document.getElementById('description').value.trim();
+      const desc   = document.getElementById('description').value.trim();
+
       if (!date || !time || isNaN(amount) || amount <= 0) {
         toast('Please fill all fields correctly', 'error'); return;
       }
       if (!desc) { toast('Add a description', 'error'); return; }
       if (!selectedPayment) { toast('Select payment type', 'error'); return; }
+
       entries.push({ date, time, amount, description: desc, paymentType: selectedPayment });
       save();
-      toast(`Entry recorded, ${username}!`, 'success');
+      toast('Entry recorded', 'success');
+
       document.getElementById('amount').value = '';
       document.getElementById('description').value = '';
       selectPayment('');
@@ -602,7 +806,7 @@
       if (!confirm('Delete this entry? This cannot be undone.')) return;
       entries.splice(index, 1);
       save();
-      toast(`Entry deleted, ${username}`, 'error');
+      toast('Entry deleted', 'error');
       render();
     }
 
@@ -611,27 +815,47 @@
       const currency = document.getElementById('currency').value;
       const list = document.getElementById('entriesList');
       const today = new Date().toISOString().split('T')[0];
+
+      // Apply filter
+      const visible = activeFilter === 'all'
+        ? entries
+        : entries.filter(e => e.paymentType === activeFilter);
+
+      // Update count
+      const label = activeFilter === 'all' ? '' : ` ${activeFilter}`;
       document.getElementById('entryCount').textContent =
-        entries.length + (entries.length === 1 ? ' entry' : ' entries');
-      if (entries.length === 0) {
+        visible.length + (visible.length === 1 ? `${label} entry` : `${label} entries`);
+
+      if (visible.length === 0) {
+        const msg = activeFilter === 'all'
+          ? 'No entries yet'
+          : `No ${activeFilter.toUpperCase()} entries`;
+        const sub = activeFilter === 'all'
+          ? 'Start recording your daily spends above'
+          : `Switch filter or add a ${activeFilter} transaction`;
         list.innerHTML = `
           <div class="empty-state">
             <div class="empty-icon"><i class="fa fa-book-open"></i></div>
-            <p>Hi ${username}, no entries yet</p>
-            <span>Start recording your daily spends above</span>
+            <p>${msg}</p>
+            <span>${sub}</span>
           </div>`;
         updateMetrics(currency);
         return;
       }
+
+      // Group by date, sorted newest first
       const groups = {};
-      entries.forEach((e, i) => {
+      visible.forEach((e) => {
+        const i = entries.indexOf(e);
         if (!groups[e.date]) groups[e.date] = [];
         groups[e.date].push({ ...e, _index: i });
       });
       const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
       list.innerHTML = sortedDates.map(date => {
         const label = formatDateLabel(date, today);
         const items = groups[date].sort((a, b) => b.time.localeCompare(a.time));
+
         return `
           <div class="date-group">
             <div class="date-group-label">${label}</div>
@@ -677,42 +901,55 @@
             `).join('')}
           </div>`;
       }).join('');
+
       updateMetrics(currency);
+      updateFilterSummary(currency);
       attachEditListeners();
     }
 
     // ─── INLINE EDIT: attach blur listeners after render ─
     function attachEditListeners() {
       document.querySelectorAll('.editable-field').forEach(el => {
+        // Prevent newlines on Enter — commit edit instead
         el.addEventListener('keydown', e => {
           if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
           if (e.key === 'Escape') {
-            const idx = parseInt(el.dataset.index);
+            // Restore original value on Escape
+            const idx   = parseInt(el.dataset.index);
             const field = el.dataset.field;
-            el.textContent = field === 'amount' ? entries[idx].amount : entries[idx][field];
+            el.textContent = field === 'amount'
+              ? entries[idx].amount
+              : entries[idx][field];
             el.blur();
           }
         });
+
         el.addEventListener('blur', () => {
-          const idx = parseInt(el.dataset.index);
+          const idx   = parseInt(el.dataset.index);
           const field = el.dataset.field;
-          const raw = el.textContent.trim();
+          const raw   = el.textContent.trim();
           const currency = document.getElementById('currency').value;
+
           if (field === 'description') {
             if (!raw) { toast('Description cannot be empty', 'error'); el.textContent = entries[idx].description; return; }
             entries[idx].description = raw;
+
           } else if (field === 'amount') {
             const val = parseFloat(raw.replace(/[^0-9.]/g, ''));
             if (isNaN(val) || val <= 0) { toast('Enter a valid amount', 'error'); el.textContent = entries[idx].amount; return; }
             entries[idx].amount = val;
+            // Re-display formatted amount after save
             el.textContent = entries[idx].amount;
+
           } else if (field === 'time') {
+            // Accept HH:MM format
             const timeRx = /^([01]?\d|2[0-3]):([0-5]\d)$/;
             if (!timeRx.test(raw)) { toast('Use HH:MM format (e.g. 14:30)', 'error'); el.textContent = entries[idx].time; return; }
             entries[idx].time = raw;
           }
+
           save();
-          toast(`Saved ✓, ${username}`, 'success');
+          toast('Saved ✓', 'success');
           updateMetrics(currency);
         });
       });
@@ -722,7 +959,7 @@
     function togglePayType(index) {
       entries[index].paymentType = entries[index].paymentType === 'cash' ? 'upi' : 'cash';
       save();
-      toast(`Payment type updated, ${username}`, 'success');
+      toast('Payment type updated', 'success');
       render();
     }
 
@@ -731,11 +968,45 @@
       const today = new Date().toISOString().split('T')[0];
       const todayEntries = entries.filter(e => e.date === today);
       const total = todayEntries.reduce((s, e) => s + e.amount, 0);
-      const cash = todayEntries.filter(e => e.paymentType === 'cash').reduce((s, e) => s + e.amount, 0);
-      const upi = todayEntries.filter(e => e.paymentType === 'upi').reduce((s, e) => s + e.amount, 0);
+      const cash  = todayEntries.filter(e => e.paymentType === 'cash').reduce((s, e) => s + e.amount, 0);
+      const upi   = todayEntries.filter(e => e.paymentType === 'upi').reduce((s, e) => s + e.amount, 0);
+
       document.getElementById('metricTotal').textContent = total > 0 ? fmt(total, currency) : '—';
-      document.getElementById('metricCash').textContent = cash > 0 ? fmt(cash, currency) : '—';
-      document.getElementById('metricUpi').textContent = upi > 0 ? fmt(upi, currency) : '—';
+      document.getElementById('metricCash').textContent  = cash  > 0 ? fmt(cash,  currency) : '—';
+      document.getElementById('metricUpi').textContent   = upi   > 0 ? fmt(upi,   currency) : '—';
+    }
+
+    // ─── FILTER SUMMARY PANEL ────────────────────────
+    function updateFilterSummary(currency) {
+      const panel = document.getElementById('filterSummary');
+
+      if (activeFilter === 'all') {
+        panel.classList.remove('visible');
+        return;
+      }
+
+      const filtered = entries.filter(e => e.paymentType === activeFilter);
+      const total    = filtered.reduce((s, e) => s + e.amount, 0);
+      const count    = filtered.length;
+      const avg      = count > 0 ? total / count : 0;
+
+      const isCash   = activeFilter === 'cash';
+      const theme    = isCash ? 'cash-theme' : 'upi-theme';
+      const hlClass  = isCash ? 'highlight-cash' : 'highlight-upi';
+      const icon     = isCash ? 'fa-money-bill-wave' : 'fa-mobile-alt';
+      const title    = isCash ? 'Cash Transactions' : 'UPI Transactions';
+
+      document.getElementById('fsSummaryHeader').className = `fs-header ${theme}`;
+      document.getElementById('fsSummaryIcon').innerHTML   = `<i class="fa ${icon}"></i>`;
+      document.getElementById('fsSummaryTitle').textContent = title;
+      document.getElementById('fsSummaryTotal').className  = `fs-stat-value ${hlClass}`;
+      document.getElementById('fsSummaryTotal').textContent = count > 0 ? fmt(total, currency) : '—';
+      document.getElementById('fsSummaryCount').className  = `fs-stat-value ${hlClass}`;
+      document.getElementById('fsSummaryCount').textContent = count;
+      document.getElementById('fsSummaryAvg').className    = `fs-stat-value ${hlClass}`;
+      document.getElementById('fsSummaryAvg').textContent  = count > 0 ? fmt(avg, currency) : '—';
+
+      panel.classList.add('visible');
     }
 
     // ─── HELPERS ──────────────────────────────────────
@@ -747,11 +1018,13 @@
       if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday';
       return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
     }
+
     function escHtml(str) {
       const d = document.createElement('div');
       d.textContent = str;
       return d.innerHTML;
     }
+
     function toast(msg, type) {
       const el = document.getElementById('toast');
       el.textContent = msg;
