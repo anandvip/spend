@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Spend Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --cream: #F5F0E8;
+      --cream-dark: #EDE6D6;
+      --ink: #1A1A1A;
+      --ink-light: #4A4A4A;
+      --ink-muted: #8A8A8A;
+      --forest: #1C4532;
+      --forest-mid: #276146;
+      --forest-light:#3A8C62;
+      --terra: #C85B3A;
+      --terra-light: #E8745A;
+      --gold: #C9922A;
+      --white: #FFFFFF;
+      --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+      --radius: 10px;
+      --radius-lg: 16px;
+    }
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Lato', sans-serif;
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(28,69,50,0.04) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(200,91,58,0.04) 0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+    header {
+      background: var(--forest);
+      color: var(--white);
+      padding: 28px 24px 24px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 4px 24px rgba(28,69,50,0.25);
+    }
+    .header-inner {
+      max-width: 640px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .brand h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem; font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+    }
+    .brand p {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; font-weight: 300;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .currency-wrap {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .currency-wrap label {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.55);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #currency {
+      background: rgba(255,255,255,0.12);
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.2s;
+    }
+    #currency option { background: var(--forest); }
+    #currency:hover { background: rgba(255,255,255,0.2); }
+    .metrics-strip {
+      background: var(--forest-mid);
+      padding: 12px 24px;
+    }
+    .metrics-inner {
+      max-width: 640px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; text-align: center;
+    }
+    .metric-card {
+      padding: 10px 4px;
+    }
+    .metric-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--white);
+      letter-spacing: -0.01em;
+    }
+    .metric-card.accent .metric-value { color: #7ED4A4; }
+    .metric-card.terra .metric-value { color: #F5A082; }
+    main {
+      max-width: 640px; margin: 0 auto;
+      padding: 24px 20px 0;
+      position: relative; z-index: 1;
+    }
+    .form-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      padding: 24px;
+      margin-bottom: 28px;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .form-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      color: var(--forest);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .form-card h2 i { font-size: 0.85rem; opacity: 0.6; }
+    .form-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 12px;
+    }
+    .field-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .field-wrap label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .field-wrap input,
+    .field-wrap select {
+      padding: 9px 12px;
+      border: 1.5px solid var(--cream-dark);
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--ink);
+      background: var(--cream);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    .field-wrap input:focus,
+    .field-wrap select:focus {
+      border-color: var(--forest-light);
+      box-shadow: 0 0 0 3px rgba(58,140,98,0.12);
+      background: var(--white);
+    }
+    .field-wrap input[type="number"] { font-size: 0.9rem; }
+    .payment-group {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 16px;
+    }
+    .pay-btn {
+      padding: 9px 12px;
+      border: 1.5px solid var(--cream-dark);
+      border-radius: 8px;
+      background: var(--cream);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center;
+      justify-content: center; gap: 6px;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .pay-btn:hover { border-color: var(--forest-light); color: var(--forest); }
+    .pay-btn.active {
+      background: var(--forest);
+      border-color: var(--forest);
+      color: var(--white);
+      box-shadow: 0 2px 8px rgba(28,69,50,0.2);
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--forest);
+      color: var(--white);
+      border: none;
+      border-radius: 8px;
+      font-family: 'Lato', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    }
+    .submit-btn:hover {
+      background: var(--forest-light);
+      box-shadow: 0 4px 16px rgba(28,69,50,0.25);
+    }
+    .submit-btn:active { transform: scale(0.99); }
+    .entries-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .entries-header h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+    .entry-count {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      background: var(--cream-dark);
+      color: var(--ink-muted);
+      padding: 3px 8px; border-radius: 20px;
+      letter-spacing: 0.06em;
+    }
+    .date-group { margin-bottom: 20px; }
+    .date-group-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.63rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: 8px;
+      padding: 0 2px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .date-group-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--cream-dark);
+    }
+    .entry-item {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 13px 16px;
+      margin-bottom: 8px;
+      display: flex; align-items: center;
+      gap: 12px;
+      border: 1px solid rgba(0,0,0,0.05);
+      transition: box-shadow 0.2s, transform 0.15s;
+      animation: slideIn 0.3s ease;
+      position: relative;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .entry-item:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+    .pay-badge {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      display: flex; align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+    .pay-badge.cash {
+      background: rgba(201,146,42,0.12);
+      color: var(--gold);
+    }
+    .pay-badge.upi {
+      background: rgba(28,69,50,0.1);
+      color: var(--forest);
+    }
+    .entry-body { flex: 1; min-width: 0; }
+    .entry-desc {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .entry-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+    .entry-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.92rem;
+      font-weight: 500;
+      color: var(--terra);
+      flex-shrink: 0;
+    }
+    .delete-btn {
+      width: 28px; height: 28px;
+      border: none; background: none;
+      color: var(--ink-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex; align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      opacity: 0;
+    }
+    .entry-item:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover {
+      background: #FEE2E2;
+      color: #DC2626;
+    }
+    .editable-field {
+      cursor: text;
+      border-radius: 4px;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      transition: background 0.15s, outline 0.15s;
+      display: inline-block;
+      min-width: 20px;
+    }
+    .editable-field:hover {
+      background: rgba(58,140,98,0.08);
+    }
+    .editable-field:focus {
+      outline: 1.5px solid var(--forest-light);
+      background: var(--white);
+      box-shadow: 0 0 0 3px rgba(58,140,98,0.12);
+    }
+    .editable-amount {
+      color: var(--terra);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.92rem;
+      font-weight: 500;
+      min-width: 48px;
+      text-align: right;
+    }
+    .editable-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-muted);
+    }
+    .edit-hint {
+      font-size: 0.52rem;
+      color: var(--forest-light);
+      margin-left: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      vertical-align: middle;
+    }
+    .entry-item:hover .edit-hint { opacity: 0.6; }
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .empty-icon {
+      font-size: 2.5rem;
+      color: var(--cream-dark);
+      margin-bottom: 16px;
+    }
+    .empty-state p {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+    }
+    .empty-state span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--ink-muted);
+      opacity: 0.6;
+    }
+    #toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.04em;
+      color: var(--white);
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.success { background: var(--forest); }
+    #toast.error { background: var(--terra); }
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+      .metrics-inner { grid-template-columns: 1fr 1fr 1fr; }
+      .metric-value { font-size: 0.78rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ─── HEADER ───────────────────────────────────── -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <h1>Spend Ledger <span id="userGreeting"></span></h1>
+        <p>Daily Tracking</p>
+      </div>
+      <div class="currency-wrap">
+        <label for="currency">Currency</label>
+        <select id="currency">
+          <option value="INR">₹ INR</option>
+          <option value="USD">$ USD</option>
+          <option value="EUR">€ EUR</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  <!-- ─── METRICS STRIP ───────────────────────────── -->
+  <div class="metrics-strip">
+    <div class="metrics-inner">
+      <div class="metric-card">
+        <div class="metric-label">Today's Total</div>
+        <div class="metric-value" id="metricTotal">—</div>
+      </div>
+      <div class="metric-card accent">
+        <div class="metric-label">Cash</div>
+        <div class="metric-value" id="metricCash">—</div>
+      </div>
+      <div class="metric-card terra">
+        <div class="metric-label">UPI</div>
+        <div class="metric-value" id="metricUpi">—</div>
+      </div>
+    </div>
+  </div>
+  <!-- ─── MAIN ─────────────────────────────────────── -->
+  <main>
+    <!-- ADD ENTRY FORM -->
+    <div class="form-card">
+      <h2><i class="fa fa-plus-circle"></i> New Entry</h2>
+      <div class="form-row">
+        <div class="field-wrap">
+          <label>Date</label>
+          <input type="date" id="date" required>
+        </div>
+        <div class="field-wrap">
+          <label>Time</label>
+          <input type="time" id="time" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field-wrap">
+          <label>Amount</label>
+          <input type="number" id="amount" placeholder="0.00" step="0.01" min="0" required>
+        </div>
+        <div class="field-wrap">
+          <label>Description</label>
+          <input type="text" id="description" placeholder="What was this for?" required>
+        </div>
+      </div>
+      <div class="field-wrap" style="margin-bottom:16px;">
+        <label>Payment Type</label>
+        <div class="payment-group">
+          <button type="button" class="pay-btn" id="btnCash" onclick="selectPayment('cash')">
+            <i class="fa fa-money-bill-wave"></i> Cash
+          </button>
+          <button type="button" class="pay-btn" id="btnUpi" onclick="selectPayment('upi')">
+            <i class="fa fa-mobile-alt"></i> UPI
+          </button>
+        </div>
+      </div>
+      <button class="submit-btn" onclick="addEntry()">
+        <i class="fa fa-check"></i> Record Spend
+      </button>
+    </div>
+    <!-- ENTRIES LIST -->
+    <div class="entries-header">
+      <h2>All Entries</h2>
+      <span class="entry-count" id="entryCount">0 entries</span>
+    </div>
+    <div id="entriesList"></div>
+  </main>
+  <div id="toast"></div>
+
+  <script>
+    // ─── STATE ───────────────────────────────────────
+    let entries = [];
+    let selectedPayment = '';
+    let username = '';
+
+    function getLocale(currency) {
+      return { INR: 'en-IN', EUR: 'de-DE', USD: 'en-US' }[currency] || 'en-US';
+    }
+    function fmt(amount, currency) {
+      return new Intl.NumberFormat(getLocale(currency), {
+        style: 'currency', currency,
+        maximumFractionDigits: 0
+      }).format(amount);
+    }
+
+    // ─── PAYMENT TOGGLE ──────────────────────────────
+    function selectPayment(type) {
+      selectedPayment = type;
+      document.getElementById('btnCash').classList.toggle('active', type === 'cash');
+      document.getElementById('btnUpi').classList.toggle('active', type === 'upi');
+    }
+
+    // ─── USERNAME CAPTURE & PERSONALISATION ───────────
+    function loadUsername() {
+      username = localStorage.getItem('username');
+      if (!username) {
+        username = prompt('Hello! What’s your name? We’ll use it to make your ledger feel personal.');
+        if (username && username.trim()) {
+          localStorage.setItem('username', username.trim());
+        } else {
+          username = 'Friend'; // graceful fallback
+        }
+      }
+      // Update header greeting
+      document.getElementById('userGreeting').textContent = username ? `for ${username}` : '';
+    }
+
+    // ─── INIT ─────────────────────────────────────────
+    function init() {
+      const savedCurrency = localStorage.getItem('currency') || 'INR';
+      document.getElementById('currency').value = savedCurrency;
+      const saved = localStorage.getItem('spends');
+      if (saved) {
+        try {
+          entries = JSON.parse(saved).map(e => ({
+            ...e,
+            time: e.time || '00:00',
+            paymentType: e.paymentType || 'cash',
+            amount: parseFloat(e.amount) || 0
+          }));
+        } catch(e) { entries = []; }
+      }
+      loadUsername();
+      setDateTime();
+      render();
+    }
+
+    function setDateTime() {
+      const now = new Date();
+      document.getElementById('date').value = now.toISOString().split('T')[0];
+      document.getElementById('time').value = now.toTimeString().slice(0, 5);
+    }
+
+    // ─── SAVE ─────────────────────────────────────────
+    function save() {
+      localStorage.setItem('spends', JSON.stringify(entries));
+      localStorage.setItem('currency', document.getElementById('currency').value);
+    }
+
+    // ─── ADD ──────────────────────────────────────────
+    function addEntry() {
+      const date = document.getElementById('date').value;
+      const time = document.getElementById('time').value;
+      const amount = parseFloat(document.getElementById('amount').value);
+      const desc = document.getElementById('description').value.trim();
+      if (!date || !time || isNaN(amount) || amount <= 0) {
+        toast('Please fill all fields correctly', 'error'); return;
+      }
+      if (!desc) { toast('Add a description', 'error'); return; }
+      if (!selectedPayment) { toast('Select payment type', 'error'); return; }
+      entries.push({ date, time, amount, description: desc, paymentType: selectedPayment });
+      save();
+      toast(`Entry recorded, ${username}!`, 'success');
+      document.getElementById('amount').value = '';
+      document.getElementById('description').value = '';
+      selectPayment('');
+      selectedPayment = '';
+      setDateTime();
+      render();
+    }
+
+    // ─── DELETE ───────────────────────────────────────
+    function deleteEntry(index) {
+      if (!confirm('Delete this entry? This cannot be undone.')) return;
+      entries.splice(index, 1);
+      save();
+      toast(`Entry deleted, ${username}`, 'error');
+      render();
+    }
+
+    // ─── RENDER ───────────────────────────────────────
+    function render() {
+      const currency = document.getElementById('currency').value;
+      const list = document.getElementById('entriesList');
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('entryCount').textContent =
+        entries.length + (entries.length === 1 ? ' entry' : ' entries');
+      if (entries.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon"><i class="fa fa-book-open"></i></div>
+            <p>Hi ${username}, no entries yet</p>
+            <span>Start recording your daily spends above</span>
+          </div>`;
+        updateMetrics(currency);
+        return;
+      }
+      const groups = {};
+      entries.forEach((e, i) => {
+        if (!groups[e.date]) groups[e.date] = [];
+        groups[e.date].push({ ...e, _index: i });
+      });
+      const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+      list.innerHTML = sortedDates.map(date => {
+        const label = formatDateLabel(date, today);
+        const items = groups[date].sort((a, b) => b.time.localeCompare(a.time));
+        return `
+          <div class="date-group">
+            <div class="date-group-label">${label}</div>
+            ${items.map(e => `
+              <div class="entry-item" data-index="${e._index}">
+                <div class="pay-badge ${e.paymentType}" title="Click to toggle payment type"
+                     onclick="togglePayType(${e._index})" style="cursor:pointer;">
+                  <i class="fa fa-${e.paymentType === 'cash' ? 'money-bill-wave' : 'mobile-alt'}"></i>
+                </div>
+                <div class="entry-body">
+                  <div class="entry-desc">
+                    <span class="editable-field"
+                          contenteditable="true"
+                          data-index="${e._index}"
+                          data-field="description"
+                          spellcheck="false"
+                          title="Click to edit description"
+                    >${escHtml(e.description)}</span>
+                    <i class="fa fa-pencil edit-hint"></i>
+                  </div>
+                  <div class="entry-meta">
+                    <span class="editable-field editable-time"
+                          contenteditable="true"
+                          data-index="${e._index}"
+                          data-field="time"
+                          title="Click to edit time"
+                    >${e.time}</span>
+                    · ${e.paymentType.toUpperCase()}
+                  </div>
+                </div>
+                <div class="entry-amount">
+                  <span class="editable-field editable-amount"
+                        contenteditable="true"
+                        data-index="${e._index}"
+                        data-field="amount"
+                        title="Click to edit amount"
+                  >${e.amount}</span>
+                </div>
+                <button class="delete-btn" onclick="deleteEntry(${e._index})" title="Delete">
+                  <i class="fa fa-times"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>`;
+      }).join('');
+      updateMetrics(currency);
+      attachEditListeners();
+    }
+
+    // ─── INLINE EDIT: attach blur listeners after render ─
+    function attachEditListeners() {
+      document.querySelectorAll('.editable-field').forEach(el => {
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+          if (e.key === 'Escape') {
+            const idx = parseInt(el.dataset.index);
+            const field = el.dataset.field;
+            el.textContent = field === 'amount' ? entries[idx].amount : entries[idx][field];
+            el.blur();
+          }
+        });
+        el.addEventListener('blur', () => {
+          const idx = parseInt(el.dataset.index);
+          const field = el.dataset.field;
+          const raw = el.textContent.trim();
+          const currency = document.getElementById('currency').value;
+          if (field === 'description') {
+            if (!raw) { toast('Description cannot be empty', 'error'); el.textContent = entries[idx].description; return; }
+            entries[idx].description = raw;
+          } else if (field === 'amount') {
+            const val = parseFloat(raw.replace(/[^0-9.]/g, ''));
+            if (isNaN(val) || val <= 0) { toast('Enter a valid amount', 'error'); el.textContent = entries[idx].amount; return; }
+            entries[idx].amount = val;
+            el.textContent = entries[idx].amount;
+          } else if (field === 'time') {
+            const timeRx = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+            if (!timeRx.test(raw)) { toast('Use HH:MM format (e.g. 14:30)', 'error'); el.textContent = entries[idx].time; return; }
+            entries[idx].time = raw;
+          }
+          save();
+          toast(`Saved ✓, ${username}`, 'success');
+          updateMetrics(currency);
+        });
+      });
+    }
+
+    // ─── TOGGLE PAYMENT TYPE ──────────────────────────
+    function togglePayType(index) {
+      entries[index].paymentType = entries[index].paymentType === 'cash' ? 'upi' : 'cash';
+      save();
+      toast(`Payment type updated, ${username}`, 'success');
+      render();
+    }
+
+    // ─── METRICS ─────────────────────────────────────
+    function updateMetrics(currency) {
+      const today = new Date().toISOString().split('T')[0];
+      const todayEntries = entries.filter(e => e.date === today);
+      const total = todayEntries.reduce((s, e) => s + e.amount, 0);
+      const cash = todayEntries.filter(e => e.paymentType === 'cash').reduce((s, e) => s + e.amount, 0);
+      const upi = todayEntries.filter(e => e.paymentType === 'upi').reduce((s, e) => s + e.amount, 0);
+      document.getElementById('metricTotal').textContent = total > 0 ? fmt(total, currency) : '—';
+      document.getElementById('metricCash').textContent = cash > 0 ? fmt(cash, currency) : '—';
+      document.getElementById('metricUpi').textContent = upi > 0 ? fmt(upi, currency) : '—';
+    }
+
+    // ─── HELPERS ──────────────────────────────────────
+    function formatDateLabel(dateStr, today) {
+      const d = new Date(dateStr + 'T00:00:00');
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (dateStr === today) return 'Today';
+      if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday';
+      return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    function escHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+    function toast(msg, type) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = type + ' show';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.classList.remove('show'); }, 2800);
+    }
+
+    // ─── CURRENCY CHANGE ──────────────────────────────
+    document.getElementById('currency').addEventListener('change', () => {
+      save(); render();
+    });
+
+    // ─── KEYBOARD: Enter submits ───────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.tagName === 'INPUT') addEntry();
+    });
+
+    init();
+  </script>
+</body>
+</html>
