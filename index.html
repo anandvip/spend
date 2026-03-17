@@ -546,6 +546,57 @@
       opacity: 0.6;
     }
 
+    /* ─── EXPORT / IMPORT TOOLBAR ────────────────── */
+    .data-toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      background: var(--white);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      align-items: center;
+    }
+    .toolbar-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+    .toolbar-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1.5px solid var(--cream-dark);
+      background: var(--cream);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover {
+      border-color: var(--forest-light);
+      color: var(--forest);
+      background: rgba(58,140,98,0.06);
+    }
+    .toolbar-btn.import-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(201,146,42,0.06);
+    }
+    .toolbar-divider {
+      width: 1px; height: 20px;
+      background: var(--cream-dark);
+      margin: 0 4px; flex-shrink: 0;
+    }
+    #importFileInput { display: none; }
+
     /* ─── TOAST ──────────────────────────────────── */
     #toast {
       position: fixed; bottom: 28px; left: 50%;
@@ -659,6 +710,23 @@
       <button class="submit-btn" onclick="addEntry()">
         <i class="fa fa-check"></i> Record Spend
       </button>
+    </div>
+
+    <!-- EXPORT / IMPORT TOOLBAR -->
+    <div class="data-toolbar">
+      <span class="toolbar-label">Export</span>
+      <button class="toolbar-btn" onclick="exportJSON()">
+        <i class="fa fa-download"></i> JSON
+      </button>
+      <button class="toolbar-btn" onclick="exportCSV()">
+        <i class="fa fa-file-csv"></i> CSV
+      </button>
+      <div class="toolbar-divider"></div>
+      <span class="toolbar-label">Import</span>
+      <button class="toolbar-btn import-btn" onclick="document.getElementById('importFileInput').click()">
+        <i class="fa fa-upload"></i> JSON / CSV
+      </button>
+      <input type="file" id="importFileInput" accept=".json,.csv" onchange="handleImport(event)">
     </div>
 
     <!-- ENTRIES LIST -->
@@ -1007,6 +1075,104 @@
       document.getElementById('fsSummaryAvg').textContent  = count > 0 ? fmt(avg, currency) : '—';
 
       panel.classList.add('visible');
+    }
+
+    // ─── EXPORT JSON ──────────────────────────────────
+    function exportJSON() {
+      if (entries.length === 0) { toast('No entries to export', 'error'); return; }
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+      triggerDownload(blob, `spend-ledger-${today()}.json`);
+      toast('Exported as JSON', 'success');
+    }
+
+    // ─── EXPORT CSV ───────────────────────────────────
+    function exportCSV() {
+      if (entries.length === 0) { toast('No entries to export', 'error'); return; }
+      const headers = ['date', 'time', 'amount', 'description', 'paymentType'];
+      const rows = entries.map(e =>
+        headers.map(h => {
+          const val = String(e[h] ?? '').replace(/"/g, '""');
+          return `"${val}"`;
+        }).join(',')
+      );
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      triggerDownload(blob, `spend-ledger-${today()}.csv`);
+      toast('Exported as CSV', 'success');
+    }
+
+    // ─── TRIGGER DOWNLOAD ─────────────────────────────
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function today() {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    // ─── IMPORT ───────────────────────────────────────
+    function handleImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          let imported = [];
+          if (file.name.endsWith('.json')) {
+            imported = parseImportedJSON(e.target.result);
+          } else if (file.name.endsWith('.csv')) {
+            imported = parseImportedCSV(e.target.result);
+          }
+          if (imported.length === 0) { toast('No valid entries found in file', 'error'); return; }
+
+          // Merge: skip exact duplicates (same date+time+amount+desc)
+          const existing = new Set(entries.map(e => `${e.date}|${e.time}|${e.amount}|${e.description}`));
+          const fresh = imported.filter(e => !existing.has(`${e.date}|${e.time}|${e.amount}|${e.description}`));
+          entries = [...entries, ...fresh];
+          save(); render();
+          toast(`Imported ${fresh.length} new entries (${imported.length - fresh.length} duplicates skipped)`, 'success');
+        } catch(err) {
+          toast('Import failed — check file format', 'error');
+        }
+      };
+      reader.readAsText(file);
+      // Reset input so same file can be re-imported if needed
+      event.target.value = '';
+    }
+
+    function parseImportedJSON(text) {
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) throw new Error('Expected array');
+      return data.map(e => ({
+        date:        String(e.date || '').trim(),
+        time:        String(e.time || '00:00').trim(),
+        amount:      parseFloat(e.amount) || 0,
+        description: String(e.description || '').trim(),
+        paymentType: ['cash','upi'].includes(e.paymentType) ? e.paymentType : 'cash'
+      })).filter(e => e.date && e.description && e.amount > 0);
+    }
+
+    function parseImportedCSV(text) {
+      const lines = text.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+      return lines.slice(1).map(line => {
+        const vals = line.match(/(".*?"|[^,]+)/g) || [];
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/"/g,'').trim(); });
+        return {
+          date:        obj.date || '',
+          time:        obj.time || '00:00',
+          amount:      parseFloat(obj.amount) || 0,
+          description: obj.description || '',
+          paymentType: ['cash','upi'].includes(obj.paymenttype) ? obj.paymenttype : 'cash'
+        };
+      }).filter(e => e.date && e.description && e.amount > 0);
     }
 
     // ─── HELPERS ──────────────────────────────────────
