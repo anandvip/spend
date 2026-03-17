@@ -103,33 +103,49 @@
     /* ─── METRICS STRIP ──────────────────────────── */
     .metrics-strip {
       background: var(--forest-mid);
-      padding: 12px 24px;
+      padding: 12px 24px 14px;
     }
     .metrics-inner {
       max-width: 640px; margin: 0 auto;
       display: grid; grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px; text-align: center;
+      gap: 0; text-align: center;
+    }
+    .metrics-row-divider {
+      grid-column: 1 / -1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 6px 0;
     }
     .metric-card {
-      padding: 10px 4px;
+      padding: 8px 4px;
+      position: relative;
+    }
+    .metric-card + .metric-card::before {
+      content: '';
+      position: absolute; left: 0; top: 20%; bottom: 20%;
+      width: 1px;
+      background: rgba(255,255,255,0.1);
     }
     .metric-label {
       font-family: 'DM Mono', monospace;
-      font-size: 0.58rem;
-      letter-spacing: 0.14em;
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 4px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 3px;
     }
     .metric-value {
       font-family: 'DM Mono', monospace;
-      font-size: 1rem;
+      font-size: 0.88rem;
       font-weight: 500;
       color: var(--white);
       letter-spacing: -0.01em;
     }
-    .metric-card.accent .metric-value { color: #7ED4A4; }
-    .metric-card.terra .metric-value { color: #F5A082; }
+    .metric-card.accent  .metric-value { color: #7ED4A4; }
+    .metric-card.terra   .metric-value { color: #F5A082; }
+    .metric-card.gold    .metric-value { color: #F5C97A; }
+    .metric-card.muted   .metric-value { color: rgba(255,255,255,0.7); }
+    .metric-card.bright  .metric-value { color: #A8D8FF; }
 
     /* ─── MAIN CONTENT ───────────────────────────── */
     main {
@@ -624,7 +640,8 @@
     @media (max-width: 480px) {
       .form-row { grid-template-columns: 1fr; }
       .metrics-inner { grid-template-columns: 1fr 1fr 1fr; }
-      .metric-value { font-size: 0.78rem; }
+      .metric-value { font-size: 0.72rem; }
+      .metric-label { font-size: 0.5rem; }
     }
   </style>
 </head>
@@ -651,18 +668,37 @@
   <!-- ─── METRICS STRIP ───────────────────────────── -->
   <div class="metrics-strip">
     <div class="metrics-inner">
-      <div class="metric-card">
-        <div class="metric-label">Today's Total</div>
-        <div class="metric-value" id="metricTotal">—</div>
-      </div>
+
+      <!-- Row 1: today's cash, upi, transaction count -->
       <div class="metric-card accent">
-        <div class="metric-label">Cash</div>
+        <div class="metric-label">Cash Today</div>
         <div class="metric-value" id="metricCash">—</div>
       </div>
       <div class="metric-card terra">
-        <div class="metric-label">UPI</div>
+        <div class="metric-label">UPI Today</div>
         <div class="metric-value" id="metricUpi">—</div>
       </div>
+      <div class="metric-card bright">
+        <div class="metric-label">Txns Today</div>
+        <div class="metric-value" id="metricTxnCount">—</div>
+      </div>
+
+      <div class="metrics-row-divider"></div>
+
+      <!-- Row 2: month total, yesterday, largest today -->
+      <div class="metric-card gold">
+        <div class="metric-label">This Month</div>
+        <div class="metric-value" id="metricMonth">—</div>
+      </div>
+      <div class="metric-card muted">
+        <div class="metric-label">Yesterday</div>
+        <div class="metric-value" id="metricYesterday">—</div>
+      </div>
+      <div class="metric-card terra">
+        <div class="metric-label">Largest Today</div>
+        <div class="metric-value" id="metricLargest">—</div>
+      </div>
+
     </div>
   </div>
 
@@ -1033,15 +1069,30 @@
 
     // ─── METRICS ─────────────────────────────────────
     function updateMetrics(currency) {
-      const today = new Date().toISOString().split('T')[0];
-      const todayEntries = entries.filter(e => e.date === today);
-      const total = todayEntries.reduce((s, e) => s + e.amount, 0);
-      const cash  = todayEntries.filter(e => e.paymentType === 'cash').reduce((s, e) => s + e.amount, 0);
-      const upi   = todayEntries.filter(e => e.paymentType === 'upi').reduce((s, e) => s + e.amount, 0);
+      const today     = new Date().toISOString().split('T')[0];
+      const ym        = today.slice(0, 7); // YYYY-MM
 
-      document.getElementById('metricTotal').textContent = total > 0 ? fmt(total, currency) : '—';
-      document.getElementById('metricCash').textContent  = cash  > 0 ? fmt(cash,  currency) : '—';
-      document.getElementById('metricUpi').textContent   = upi   > 0 ? fmt(upi,   currency) : '—';
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDay = yesterday.toISOString().split('T')[0];
+
+      const todayEntries     = entries.filter(e => e.date === today);
+      const yesterdayEntries = entries.filter(e => e.date === yDay);
+      const monthEntries     = entries.filter(e => e.date.startsWith(ym));
+
+      const cash    = todayEntries.filter(e => e.paymentType === 'cash').reduce((s, e) => s + e.amount, 0);
+      const upi     = todayEntries.filter(e => e.paymentType === 'upi').reduce((s, e) => s + e.amount, 0);
+      const txnCount = todayEntries.length;
+      const month   = monthEntries.reduce((s, e) => s + e.amount, 0);
+      const yTotal  = yesterdayEntries.reduce((s, e) => s + e.amount, 0);
+      const largest = todayEntries.length > 0 ? Math.max(...todayEntries.map(e => e.amount)) : 0;
+
+      document.getElementById('metricCash').textContent     = cash    > 0 ? fmt(cash,    currency) : '—';
+      document.getElementById('metricUpi').textContent      = upi     > 0 ? fmt(upi,     currency) : '—';
+      document.getElementById('metricTxnCount').textContent = txnCount > 0 ? txnCount    : '—';
+      document.getElementById('metricMonth').textContent    = month   > 0 ? fmt(month,   currency) : '—';
+      document.getElementById('metricYesterday').textContent= yTotal  > 0 ? fmt(yTotal,  currency) : '—';
+      document.getElementById('metricLargest').textContent  = largest > 0 ? fmt(largest, currency) : '—';
     }
 
     // ─── FILTER SUMMARY PANEL ────────────────────────
