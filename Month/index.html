@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F5F0E8">
+<title>BillFlow</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script>
+tailwind.config={theme:{extend:{colors:{cream:{DEFAULT:'#F5F0E8',dark:'#EBE4D8'},coral:{DEFAULT:'#E8654A',light:'#FFF0ED',dark:'#D4502F'},teal:{DEFAULT:'#2D9C8F',light:'#E8F6F4',dark:'#1F7A6F'},bark:'#2C2825',sand:'#E5DFD5',dust:'#A09A92'},fontFamily:{display:['"Space Grotesk"','sans-serif'],mono:['"JetBrains Mono"','monospace']}}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 80% 10%,rgba(232,101,74,.04),transparent),radial-gradient(ellipse 60% 40% at 10% 90%,rgba(45,156,143,.03),transparent);pointer-events:none;z-index:0}
+.scrollbar-hide::-webkit-scrollbar{display:none}
+.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.cat-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px;transition:background .15s}
+.cat-row:hover{background:#FAFAF8}
+.cat-row:focus-within{background:#FFF0ED}
+.cat-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:transform .2s}
+.cat-row:focus-within .cat-icon{transform:scale(1.1)}
+.cat-label{flex:1;font-size:14px;font-weight:500;min-width:0}
+.cat-input{width:130px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;padding:7px 10px;border:1.5px solid #E5DFD5;border-radius:9px;background:#FAFAF8;outline:none;transition:border-color .2s,box-shadow .2s;color:#2C2825}
+.cat-input:focus{border-color:#E8654A;box-shadow:0 0 0 3px rgba(232,101,74,.1)}
+.cat-input::placeholder{color:#CCC8C0}
+.month-pill{padding:7px 15px;border-radius:20px;font-size:13px;font-weight:500;border:1.5px solid transparent;cursor:pointer;transition:all .2s;white-space:nowrap;background:#fff;color:#A09A92;position:relative}
+.month-pill:hover{border-color:#E5DFD5;color:#2C2825}
+.month-pill.active{background:#E8654A;color:#fff;border-color:#E8654A;box-shadow:0 2px 12px rgba(232,101,74,.25)}
+.month-pill .dot{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:#2D9C8F;transition:background .2s}
+.month-pill.active .dot{background:rgba(255,255,255,.7)}
+.progress-track{height:7px;background:#F0EBE3;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#E8654A,#2D9C8F);border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.cat-bar-track{height:5px;background:#F0EBE3;border-radius:3px;flex:1;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:3px;transition:width .4s ease}
+.section-toggle{cursor:pointer;user-select:none}
+.section-toggle:hover .toggle-label{color:#2C2825}
+.toggle-chev{transition:transform .3s}
+.mini-card{transition:transform .15s,box-shadow .15s}
+.mini-card:active{transform:scale(.97)}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.anim-in{animation:slideUp .3s ease-out}
+@media(max-width:640px){.cat-input{width:110px;font-size:13px;padding:6px 8px}.cat-label{font-size:13px}}
+</style>
+</head>
+<body class="bg-cream font-display text-bark min-h-screen relative">
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bark text-cream px-5 py-2.5 rounded-xl text-sm font-medium opacity-0 transition-all duration-300 translate-y-4 pointer-events-none z-50 whitespace-nowrap"></div>
+
+<div class="relative z-10 max-w-5xl mx-auto">
+<!-- Header -->
+<header class="sticky top-0 z-30 bg-cream/90 backdrop-blur-lg border-b border-sand">
+    <div class="px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 bg-coral rounded-xl flex items-center justify-center shadow-sm shadow-coral/20">
+                <i class="fas fa-chart-line text-white text-sm"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight leading-tight">BillFlow</h1>
+                <p class="text-[10px] font-mono text-dust tracking-wider uppercase">Expense Tracker</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <button id="prevYear" class="w-8 h-8 rounded-lg bg-white border border-sand flex items-center justify-center hover:border-coral transition text-dust hover:text-coral" aria-label="Previous year"><i class="fas fa-chevron-left text-xs"></i></button>
+            <span id="yearDisplay" class="font-mono text-sm font-semibold w-14 text-center">2025</span>
+            <button id="nextYear" class="w-8 h-8 rounded-lg bg-white border border-sand flex items-center justify-center hover:border-coral transition text-dust hover:text-coral" aria-label="Next year"><i class="fas fa-chevron-right text-xs"></i></button>
+        </div>
+    </div>
+    <div id="monthTabs" class="px-4 pb-3 flex gap-1.5 overflow-x-auto scrollbar-hide"></div>
+</header>
+
+<main class="px-4 py-5 pb-10">
+    <!-- Mini Summary -->
+    <div id="miniSummary" class="grid grid-cols-3 gap-2.5 mb-5"></div>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-5">
+        <!-- Entry Form -->
+        <div class="md:col-span-3 space-y-4">
+            <div class="bg-white rounded-2xl border border-sand p-4 shadow-sm">
+                <h2 class="text-[11px] font-mono uppercase tracking-[.15em] text-dust mb-2">Income</h2>
+                <div id="incomeFields"></div>
+            </div>
+            <div class="bg-white rounded-2xl border border-sand p-4 shadow-sm">
+                <h2 class="text-[11px] font-mono uppercase tracking-[.15em] text-dust mb-2">Monthly Bills</h2>
+                <div id="monthlyFields"></div>
+            </div>
+            <div class="bg-white rounded-2xl border border-sand p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-2">
+                    <h2 class="text-[11px] font-mono uppercase tracking-[.15em] text-dust">Bimonthly Bills</h2>
+                    <span class="text-[9px] font-mono bg-coral-light text-coral px-2 py-0.5 rounded-full font-medium">every 2 mo</span>
+                </div>
+                <div id="bimonthlyFields"></div>
+            </div>
+            <div class="flex gap-2.5">
+                <button id="copyPrev" class="flex-1 py-2.5 rounded-xl border border-sand bg-white text-sm font-medium hover:border-coral hover:text-coral transition flex items-center justify-center gap-2 shadow-sm">
+                    <i class="fas fa-copy text-xs"></i> Copy Previous Month
+                </button>
+                <button id="clearMonth" class="py-2.5 px-4 rounded-xl border border-sand bg-white text-sm font-medium hover:border-red-400 hover:text-red-500 transition flex items-center justify-center gap-2 shadow-sm">
+                    <i class="fas fa-eraser text-xs"></i> Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Detailed Summary Sidebar -->
+        <div class="md:col-span-2">
+            <div id="summaryCard" class="bg-white rounded-2xl border border-sand p-5 shadow-sm md:sticky md:top-[130px]"></div>
+        </div>
+    </div>
+
+    <!-- 12-Month Overview -->
+    <section class="mt-7">
+        <button id="toggleTable" class="section-toggle w-full flex items-center justify-between py-2.5 text-sm font-medium text-dust">
+            <span class="toggle-label flex items-center gap-2"><i class="fas fa-table-cells text-xs"></i> 12-Month Overview</span>
+            <i class="fas fa-chevron-down text-xs toggle-chev" id="tableChev"></i>
+        </button>
+        <div id="tableWrapper" class="overflow-hidden transition-all duration-300 ease-out" style="max-height:0">
+            <div class="bg-white rounded-2xl border border-sand overflow-x-auto shadow-sm mt-1">
+                <table id="overviewTable" class="w-full text-sm min-w-[600px]"></table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="mt-5">
+        <button id="toggleChart" class="section-toggle w-full flex items-center justify-between py-2.5 text-sm font-medium text-dust">
+            <span class="toggle-label flex items-center gap-2"><i class="fas fa-chart-column text-xs"></i> Visual Chart</span>
+            <i class="fas fa-chevron-down text-xs toggle-chev" id="chartChev"></i>
+        </button>
+        <div id="chartWrapper" class="overflow-hidden transition-all duration-300 ease-out" style="max-height:0">
+            <div class="bg-white rounded-2xl border border-sand p-4 shadow-sm mt-1" style="height:320px">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Export -->
+    <section class="mt-6 mb-4 flex flex-wrap gap-3">
+        <button id="exportJSON" class="py-2.5 px-5 rounded-xl border border-sand bg-white text-sm font-medium hover:border-coral hover:text-coral transition flex items-center gap-2 shadow-sm">
+            <i class="fas fa-code text-xs"></i> Export JSON
+        </button>
+        <button id="exportCSV" class="py-2.5 px-5 rounded-xl border border-sand bg-white text-sm font-medium hover:border-coral hover:text-coral transition flex items-center gap-2 shadow-sm">
+            <i class="fas fa-file-csv text-xs"></i> Export CSV
+        </button>
+    </section>
+</main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   Constants
+   ═══════════════════════════════════════ */
+const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MF = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const CATS = [
+    {key:'salary',label:'Salary',icon:'fa-wallet',clr:'bg-teal-light text-teal',type:'income',cycle:'monthly'},
+    {key:'maid',label:'Maid',icon:'fa-broom',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'cook',label:'Cook',icon:'fa-utensils',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'milkman',label:'Milkman',icon:'fa-bottle-water',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'electricity',label:'Electricity',icon:'fa-bolt',clr:'bg-coral-light text-coral',type:'expense',cycle:'bimonthly'},
+    {key:'water',label:'Water',icon:'fa-droplet',clr:'bg-coral-light text-coral',type:'expense',cycle:'bimonthly'},
+    {key:'gas',label:'Pipeline Gas',icon:'fa-fire-flame-simple',clr:'bg-coral-light text-coral',type:'expense',cycle:'bimonthly'},
+    {key:'internet',label:'Internet',icon:'fa-wifi',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'kiryana',label:'Kiryana',icon:'fa-basket-shopping',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'pharmacy',label:'Pharmacy',icon:'fa-prescription-bottle-medical',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+    {key:'fuel',label:'Fuel',icon:'fa-gas-pump',clr:'bg-sand text-bark',type:'expense',cycle:'monthly'},
+];
+const EXP_CATS = CATS.filter(c=>c.type==='expense');
+const SK = 'billflow_v2';
+
+/* ═══════════════════════════════════════
+   State
+   ═══════════════════════════════════════ */
+let year, month, data, chart = null, chartReady = false;
+let clearPending = false, clearTimer = null;
+let summaryTimer = null, chartTimer = null, tableTimer = null;
+
+/* ═══════════════════════════════════════
+   Persistence
+   ═══════════════════════════════════════ */
+function load(){
+    try{ const s=localStorage.getItem(SK); if(s){ const p=JSON.parse(s); data=p.data||{}; } else data={}; }
+    catch(e){ data={}; }
+}
+function save(){ try{ localStorage.setItem(SK,JSON.stringify({data,ver:2})); }catch(e){} }
+
+/* ═══════════════════════════════════════
+   Data Access
+   ═══════════════════════════════════════ */
+function md(y,m){ if(!data[y])data[y]={}; if(!data[y][m])data[y][m]={}; return data[y][m]; }
+function gv(y,m,k){ const d=md(y,m); return d[k]!=null&&d[k]!==''?Number(d[k]):null; }
+function sv(k,v){
+    const d=md(year,month);
+    if(v===''||v===null||v===undefined) delete d[k];
+    else d[k]=Math.max(0,Math.round(Number(v)));
+    save();
+}
+
+/* ═══════════════════════════════════════
+   Computed
+   ═══════════════════════════════════════ */
+function mExp(y,m){ let t=0,h=false; EXP_CATS.forEach(c=>{const v=gv(y,m,c.key);if(v!==null){t+=v;h=true;}}); return h?t:null; }
+function mSal(y,m){ return gv(y,m,'salary'); }
+function yExp(){ let t=0,n=0; for(let m=1;m<=12;m++){const e=mExp(year,m);if(e!==null){t+=e;n++;}} return{t,n}; }
+function ySal(){ let t=0,n=0; for(let m=1;m<=12;m++){const s=mSal(year,m);if(s!==null){t+=s;n++;}} return{t,n}; }
+function filled(){ let c=0; for(let m=1;m<=12;m++){if(Object.keys(md(year,m)).length>0)c++;} return c; }
+function hasData(y,m){ return Object.keys(md(y,m)).length>0; }
+
+/* ═══════════════════════════════════════
+   Formatting — Indian Number System
+   ═══════════════════════════════════════ */
+function fmtI(n){
+    if(n===null||n===undefined) return '—';
+    n=Number(n); if(isNaN(n)) return '—';
+    const neg=n<0; n=Math.abs(n);
+    const s=Math.round(n).toString();
+    let r; if(s.length<=3) r=s;
+    else{ r=s.slice(0,-3).replace(/\B(?=(\d{2})+(?!\d))/g,',')+','+s.slice(-3); }
+    return(neg?'-':'')+'₹'+r;
+}
+function fmtS(n){
+    if(n===null||n===undefined) return '—';
+    n=Number(n); if(isNaN(n)) return '—';
+    const neg=n<0; n=Math.abs(n);
+    let r;
+    if(n>=1e7) r=(n/1e7).toFixed(1).replace(/\.0$/,'')+'Cr';
+    else if(n>=1e5) r=(n/1e5).toFixed(1).replace(/\.0$/,'')+'L';
+    else if(n>=1e3) r=(n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+    else r=n.toString();
+    return(neg?'-':'')+'₹'+r;
+}
+
+/* ═══════════════════════════════════════
+   Render — Month Tabs
+   ═══════════════════════════════════════ */
+function rTabs(){
+    $('monthTabs').innerHTML=MO.map((n,i)=>{
+        const m=i+1, a=m===month?'active':'', d=hasData(year,m);
+        return`<button class="month-pill ${a}" data-m="${m}">${n}${d?'<span class="dot"></span>':''}</button>`;
+    }).join('');
+}
+
+/* ═══════════════════════════════════════
+   Render — Entry Form
+   ═══════════════════════════════════════ */
+function catRow(c){
+    const v=gv(year,month,c.key), vs=v!==null?v:'';
+    return`<div class="cat-row"><div class="cat-icon ${c.clr}"><i class="fas ${c.icon}"></i></div><span class="cat-label">${c.label}</span><input type="number" class="cat-input" data-k="${c.key}" value="${vs}" placeholder="0" min="0" inputmode="numeric" aria-label="${c.label}"></div>`;
+}
+function rForm(){
+    $('incomeFields').innerHTML=CATS.filter(c=>c.type==='income').map(catRow).join('');
+    $('monthlyFields').innerHTML=CATS.filter(c=>c.type==='expense'&&c.cycle==='monthly').map(catRow).join('');
+    $('bimonthlyFields').innerHTML=CATS.filter(c=>c.type==='expense'&&c.cycle==='bimonthly').map(catRow).join('');
+}
+
+/* ═══════════════════════════════════════
+   Render — Mini Summary
+   ═══════════════════════════════════════ */
+function rMini(){
+    const e=mExp(year,month), s=mSal(year,month);
+    const bal=(e!==null&&s!==null)?s-e:null;
+    const balClr=bal===null?'text-bark':bal>=0?'text-teal':'text-coral';
+    const balBg=bal===null?'border-sand':bal>=0?'border-teal/30':'border-coral/30';
+    $('miniSummary').innerHTML=`
+        <div class="mini-card bg-white rounded-xl border border-sand p-3 shadow-sm">
+            <div class="text-[9px] font-mono uppercase tracking-wider text-dust mb-0.5">Spent</div>
+            <div class="text-base font-bold font-mono">${fmtS(e)}</div>
+        </div>
+        <div class="mini-card bg-white rounded-xl border border-sand p-3 shadow-sm">
+            <div class="text-[9px] font-mono uppercase tracking-wider text-dust mb-0.5">Salary</div>
+            <div class="text-base font-bold font-mono text-teal">${fmtS(s)}</div>
+        </div>
+        <div class="mini-card bg-white rounded-xl border ${balBg} p-3 shadow-sm">
+            <div class="text-[9px] font-mono uppercase tracking-wider text-dust mb-0.5">Balance</div>
+            <div class="text-base font-bold font-mono ${balClr}">${bal!==null?(bal>=0?'+':'')+fmtS(bal):'—'}</div>
+        </div>`;
+}
+
+/* ═══════════════════════════════════════
+   Render — Detailed Summary
+   ═══════════════════════════════════════ */
+function rSummary(){
+    const exp=mExp(year,month), sal=mSal(year,month);
+    const surplus=(exp!==null&&sal!==null)?sal-exp:null;
+    const ye=yExp(), ys=ySal(), fl=filled();
+    const avg=ye.n>0?Math.round(ye.t/ye.n):null;
+    const proj=avg!==null?avg*12:null;
+    const avgS=ys.n>0?Math.round(ys.t/ys.n):null;
+    const projS=avgS!==null?avgS*12:null;
+
+    // Category breakdown for current month
+    const bd=EXP_CATS.map(c=>({...c,val:gv(year,month,c.key)})).filter(c=>c.val!==null&&c.val>0).sort((a,b)=>b.val-a.val);
+    const mx=bd.length>0?bd[0].val:1;
+
+    const bdr=surplus!==null?(surplus>=0?'border-top:3px solid #2D9C8F':'border-top:3px solid #E8654A'):'border-top:3px solid transparent';
+
+    $('summaryCard').style.cssText=bdr;
+    $('summaryCard').innerHTML=`
+        <div class="text-[11px] font-mono uppercase tracking-[.15em] text-dust mb-4">Live Summary</div>
+        <div class="flex justify-between items-center mb-3">
+            <span class="text-sm text-dust">This Month</span>
+            <span class="text-xs font-mono text-dust">${MF[month-1]} ${year}</span>
+        </div>
+        <div class="flex justify-between items-end mb-3">
+            <div><div class="text-[10px] text-dust mb-0.5">Expenses</div><div class="text-xl font-bold">${fmtI(exp)}</div></div>
+            <div class="text-right"><div class="text-[10px] text-dust mb-0.5">Salary</div><div class="text-xl font-bold text-teal">${fmtI(sal)}</div></div>
+        </div>
+        ${surplus!==null?`<div class="flex justify-between items-center py-2.5 px-3.5 rounded-xl mb-4 ${surplus>=0?'bg-teal-light':'bg-coral-light'}">
+            <span class="text-sm font-semibold ${surplus>=0?'text-teal-dark':'text-coral-dark'}">${surplus>=0?'Surplus':'Deficit'}</span>
+            <span class="text-lg font-bold font-mono ${surplus>=0?'text-teal':'text-coral'}">${surplus>=0?'+':''}${fmtI(surplus)}</span>
+        </div>`:'<div class="mb-4"></div>'}
+        <div class="mb-4">
+            <div class="flex justify-between text-xs mb-1.5"><span class="text-dust">Year Progress</span><span class="font-mono font-medium">${fl}/12 months</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:${(fl/12*100).toFixed(1)}%"></div></div>
+            ${fl===12?'<div class="text-[11px] text-teal mt-1.5 font-medium flex items-center gap-1"><i class="fas fa-check-circle text-[10px]"></i> All months tracked — disciplined!</div>':''}
+        </div>
+        <div class="grid grid-cols-2 gap-2.5 mb-5">
+            <div class="bg-cream rounded-xl p-3"><div class="text-[9px] font-mono uppercase text-dust mb-1">Avg Expense</div><div class="text-sm font-bold">${fmtS(avg)}</div></div>
+            <div class="bg-cream rounded-xl p-3"><div class="text-[9px] font-mono uppercase text-dust mb-1">Projected/Year</div><div class="text-sm font-bold">${fmtS(proj)}</div></div>
+            <div class="bg-cream rounded-xl p-3"><div class="text-[9px] font-mono uppercase text-dust mb-1">Avg Salary</div><div class="text-sm font-bold text-teal">${fmtS(avgS)}</div></div>
+            <div class="bg-cream rounded-xl p-3"><div class="text-[9px] font-mono uppercase text-dust mb-1">Projected Income</div><div class="text-sm font-bold text-teal">${fmtS(projS)}</div></div>
+        </div>
+        ${bd.length>0?`<div><div class="text-[11px] font-mono uppercase tracking-[.15em] text-dust mb-3">Breakdown</div><div class="space-y-2.5">${bd.map(c=>`<div class="flex items-center gap-2.5"><span class="text-xs w-[72px] truncate text-dust flex-shrink-0">${c.label}</span><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(c.val/mx*100).toFixed(1)}%;background:${c.cycle==='bimonthly'?'#E8654A':'#C4A882'}"></div></div><span class="text-xs font-mono w-14 text-right flex-shrink-0">${fmtS(c.val)}</span></div>`).join('')}</div></div>`
+        :'<div class="text-xs text-dust italic text-center py-6">Enter amounts above to see the breakdown</div>'}`;
+}
+
+/* ═══════════════════════════════════════
+   Render — 12-Month Table
+   ═══════════════════════════════════════ */
+function rTable(){
+    const ths=['Month','Salary','Maid','Cook','Milk','Elec','Water','Gas','Net','Kiryana','Pharm','Fuel','Total','Balance'];
+    const keys=['salary','maid','cook','milkman','electricity','water','gas','internet','kiryana','pharmacy','fuel'];
+    let h=`<thead><tr class="border-b border-sand">${ths.map(t=>`<th class="px-2.5 py-2.5 text-left text-[10px] font-mono uppercase tracking-wider text-dust font-medium whitespace-nowrap">${t}</th>`).join('')}</tr></thead><tbody>`;
+    for(let m=1;m<=12;m++){
+        const e=mExp(year,m), s=mSal(year,m), bal=(e!==null&&s!==null)?s-e:null;
+        const isActive=m===month;
+        h+=`<tr class="border-b border-cream-dark ${isActive?'bg-coral-light/40':''}">`;
+        h+=`<td class="px-2.5 py-2 font-medium text-sm whitespace-nowrap sticky left-0 ${isActive?'bg-coral-light/40':'bg-white'}">${MO[m-1]}</td>`;
+        h+=`<td class="px-2.5 py-2 font-mono text-xs text-teal whitespace-nowrap">${s!==null?fmtS(s):''}</td>`;
+        keys.slice(1).forEach(k=>{
+            const v=gv(year,m,k);
+            h+=`<td class="px-2.5 py-2 font-mono text-xs whitespace-nowrap ${v?'':'text-dust/40'}">${v?fmtS(v):'—'}</td>`;
+        });
+        h+=`<td class="px-2.5 py-2 font-mono text-xs font-semibold whitespace-nowrap">${e!==null?fmtS(e):''}</td>`;
+        h+=`<td class="px-2.5 py-2 font-mono text-xs font-semibold whitespace-nowrap ${bal===null?'':bal>=0?'text-teal':'text-coral'}">${bal!==null?(bal>=0?'+':'')+fmtS(bal):''}</td>`;
+        h+=`</tr>`;
+    }
+    // Totals row
+    h+=`<tr class="border-t-2 border-sand font-semibold">`;
+    h+=`<td class="px-2.5 py-2.5 text-sm sticky left-0 bg-white">Total</td>`;
+    const ye=yExp(), ys=ySal();
+    h+=`<td class="px-2.5 py-2.5 font-mono text-xs text-teal">${ys.t?fmtS(ys.t):''}</td>`;
+    keys.slice(1).forEach(k=>{
+        let t=0,n=0;for(let m=1;m<=12;m++){const v=gv(year,m,k);if(v!==null){t+=v;n++;}}
+        h+=`<td class="px-2.5 py-2.5 font-mono text-xs">${n?fmtS(t):''}</td>`;
+    });
+    h+=`<td class="px-2.5 py-2.5 font-mono text-xs">${ye.t?fmtS(ye.t):''}</td>`;
+    const totalBal=(ye.t&&ys.t)?ys.t-ye.t:null;
+    h+=`<td class="px-2.5 py-2.5 font-mono text-xs ${totalBal===null?'':totalBal>=0?'text-teal':'text-coral'}">${totalBal!==null?(totalBal>=0?'+':'')+fmtS(totalBal):''}</td>`;
+    h+=`</tr></tbody>`;
+    $('overviewTable').innerHTML=h;
+}
+
+/* ═══════════════════════════════════════
+   Chart
+   ═══════════════════════════════════════ */
+function chartData(){
+    const ed=[],sd=[];
+    for(let m=1;m<=12;m++){ ed.push(mExp(year,m)); sd.push(mSal(year,m)); }
+    return{labels:MO,datasets:[
+        {label:'Expenses',data:ed,backgroundColor:'rgba(232,101,74,.7)',borderColor:'#E8654A',borderWidth:1.5,borderRadius:6,borderSkipped:false,barPercentage:.55,order:2},
+        {label:'Salary',data:sd,type:'line',borderColor:'#2D9C8F',backgroundColor:'rgba(45,156,143,.06)',fill:true,tension:.35,pointRadius:5,pointBackgroundColor:'#2D9C8F',pointBorderColor:'#fff',pointBorderWidth:2,spanGaps:true,order:1}
+    ]};
+}
+function createChart(){
+    if(typeof Chart==='undefined') return;
+    const ctx=$('mainChart').getContext('2d');
+    chart=new Chart(ctx,{type:'bar',data:chartData(),options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+            legend:{position:'top',labels:{font:{family:'Space Grotesk',size:12},usePointStyle:true,pointStyle:'circle',padding:16,color:'#A09A92'}},
+            tooltip:{backgroundColor:'#2C2825',titleFont:{family:'Space Grotesk',size:13},bodyFont:{family:'JetBrains Mono',size:12},padding:12,cornerRadius:10,
+                callbacks:{label:c=>c.dataset.label+': '+fmtI(c.raw)}}
+        },
+        scales:{
+            x:{grid:{display:false},ticks:{font:{family:'Space Grotesk',size:11},color:'#A09A92'}},
+            y:{grid:{color:'#F0EBE3',drawBorder:false},ticks:{font:{family:'JetBrains Mono',size:10},color:'#A09A92',callback:v=>fmtS(v)},beginAtZero:true}
+        }
+    }});
+    chartReady=true;
+}
+function updateChart(){ if(!chart)return; chart.data=chartData(); chart.update('none'); }
+
+/* ═══════════════════════════════════════
+   Render All
+   ═══════════════════════════════════════ */
+function renderAll(){ rTabs(); rForm(); rMini(); rSummary(); rTable(); if(chartReady) updateChart(); }
+
+/* ═══════════════════════════════════════
+   Actions
+   ═══════════════════════════════════════ */
+function copyPrev(){
+    let pm=month-1, py=year;
+    if(pm<1){pm=12;py--;}
+    const pd=data[py]&&data[py][pm];
+    if(!pd||Object.keys(pd).length===0){ toast('No data in previous month'); return; }
+    const d=md(year,month);
+    Object.assign(d,JSON.parse(JSON.stringify(pd)));
+    save(); renderAll();
+    toast('Copied from '+MO[pm-1]+' '+py);
+}
+
+function clearMonth(){
+    if(clearPending){
+        clearTimeout(clearTimer);
+        data[year][month]={}; save(); renderAll();
+        toast(MF[month-1]+' cleared');
+        resetClearBtn();
+    } else {
+        clearPending=true;
+        const btn=$('clearMonth');
+        btn.innerHTML='<i class="fas fa-triangle-exclamation text-xs"></i> Confirm?';
+        btn.classList.add('!border-red-400','!text-red-500');
+        clearTimer=setTimeout(resetClearBtn,3000);
+    }
+}
+function resetClearBtn(){
+    clearPending=false;
+    const btn=$('clearMonth');
+    btn.innerHTML='<i class="fas fa-eraser text-xs"></i> Clear';
+    btn.classList.remove('!border-red-400','!text-red-500');
+}
+
+/* ═══════════════════════════════════════
+   Export
+   ═══════════════════════════════════════ */
+function dl(blob,name){ const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);toast('Saved '+name); }
+function expJSON(){ dl(new Blob([JSON.stringify({year,data:data[year]||{}},null,2)],{type:'application/json'}),'billflow-'+year+'.json'); }
+function expCSV(){
+    const hd=['Month',...CATS.map(c=>c.label),'Total Expenses','Balance'];
+    const rows=[hd.join(',')];
+    for(let m=1;m<=12;m++){
+        const r=[MF[m-1]]; let te=0;
+        CATS.forEach(c=>{const v=gv(year,m,c.key);r.push(v!==null?v:'');if(c.type==='expense'&&v!==null)te+=v;});
+        const s=mSal(year,m); r.push(te||''); r.push((te&&s!==null)?s-te:'');
+        rows.push(r.join(','));
+    }
+    dl(new Blob([rows.join('\n')],{type:'text/csv'}),'billflow-'+year+'.csv');
+}
+
+/* ═══════════════════════════════════════
+   Collapsible Sections
+   ═══════════════════════════════════════ */
+function toggleSection(wrapperId, chevId, onOpen){
+    const w=$(wrapperId), ch=$(chevId);
+    const open=w.style.maxHeight!=='0px';
+    if(open){w.style.maxHeight='0px';ch.style.transform='rotate(0deg)';}
+    else{w.style.maxHeight=w.scrollHeight+40+'px';ch.style.transform='rotate(180deg)';if(onOpen)onOpen();}
+}
+
+/* ═══════════════════════════════════════
+   Toast
+   ═══════════════════════════════════════ */
+let toastTimer;
+function toast(msg){ clearTimeout(toastTimer); const t=$('toast');t.textContent=msg;t.classList.add('opacity-100','translate-y-0');t.classList.remove('opacity-0','translate-y-4');toastTimer=setTimeout(()=>{t.classList.remove('opacity-100','translate-y-0');t.classList.add('opacity-0','translate-y-4');},2200); }
+
+/* ═══════════════════════════════════════
+   Helpers
+   ═══════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+
+/* ═══════════════════════════════════════
+   Event Binding
+   ═══════════════════════════════════════ */
+function bind(){
+    // Year navigation
+    $('prevYear').onclick=()=>{year--;$('yearDisplay').textContent=year;renderAll();};
+    $('nextYear').onclick=()=>{year++;$('yearDisplay').textContent=year;renderAll();};
+
+    // Month tabs — delegate
+    $('monthTabs').addEventListener('click',e=>{
+        const pill=e.target.closest('.month-pill');
+        if(!pill)return;
+        month=parseInt(pill.dataset.m);
+        renderAll();
+        window.scrollTo({top:0,behavior:'smooth'});
+    });
+
+    // Input fields — delegate
+    document.addEventListener('input',e=>{
+        if(!e.target.classList.contains('cat-input'))return;
+        sv(e.target.dataset.k, e.target.value);
+        rTabs(); // Update dots immediately
+        // Debounce heavier renders
+        clearTimeout(summaryTimer);
+        summaryTimer=setTimeout(()=>{rMini();rSummary();},60);
+        clearTimeout(tableTimer);
+        tableTimer=setTimeout(rTable,400);
+        if(chartReady){clearTimeout(chartTimer);chartTimer=setTimeout(updateChart,500);}
+    });
+
+    // Also handle blur to ensure final value is saved
+    document.addEventListener('focusout',e=>{
+        if(!e.target.classList.contains('cat-input'))return;
+        sv(e.target.dataset.k, e.target.value);
+        rMini(); rSummary(); rTable(); if(chartReady) updateChart();
+    });
+
+    // Action buttons
+    $('copyPrev').onclick=copyPrev;
+    $('clearMonth').onclick=clearMonth;
+
+    // Collapsible sections
+    $('toggleTable').onclick=()=>{
+        const wasOpen=$('tableWrapper').style.maxHeight!=='0px';
+        toggleSection('tableWrapper','tableChev',()=>{
+            rTable();
+            // Recalc max-height after table renders
+            setTimeout(()=>$('tableWrapper').style.maxHeight=$('tableWrapper').scrollHeight+40+'px',50);
+        });
+    };
+    $('toggleChart').onclick=()=>toggleSection('chartWrapper','chartChev',()=>{
+        if(!chartReady) setTimeout(createChart,120);
+        else updateChart();
+        setTimeout(()=>$('chartWrapper').style.maxHeight=$('chartWrapper').scrollHeight+40+'px',50);
+    });
+
+    // Export
+    $('exportJSON').onclick=expJSON;
+    $('exportCSV').onclick=expCSV;
+
+    // Keyboard navigation
+    document.addEventListener('keydown',e=>{
+        if(e.target.classList.contains('cat-input'))return;
+        if(e.key==='ArrowLeft'){month=month>1?month-1:12;renderAll();e.preventDefault();}
+        if(e.key==='ArrowRight'){month=month<12?month+1:1;renderAll();e.preventDefault();}
+    });
+}
+
+/* ═══════════════════════════════════════
+   Init
+   ═══════════════════════════════════════ */
+(function init(){
+    const now=new Date();
+    year=now.getFullYear(); month=now.getMonth()+1;
+    load();
+    $('yearDisplay').textContent=year;
+    renderAll();
+    bind();
+})();
+</script>
+</body>
+</html>
