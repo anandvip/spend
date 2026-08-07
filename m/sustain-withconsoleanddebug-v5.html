@@ -1,0 +1,1861 @@
+<!DOCTYPE html>
+<!--
+  ══════════════════════════════════════════════════════════════
+  SUSTAIN v5 — household sustenance & allocation ledger
+  ══════════════════════════════════════════════════════════════
+  Origin ....... Built with Claude (Anthropic, Opus 5)
+  Session ...... PASTE_CHAT_URL_HERE
+  Project ...... PASTE_PROJECT_URL_HERE
+  Repo ......... PASTE_GITHUB_URL_HERE
+  Created ...... 2026-08-06
+  Lineage ...... BillFlow v2 (GLM 5.2) → Sustain v3 → v4 → v5
+  Sibling ...... Farm & FD calculator — https://anandvip.github.io/farm-contract/
+
+  ── What changed in v5, and why ────────────────────────────────
+  v4 hardcoded three income streams. Wrong. Income is a LIST you
+  can add to, because the real portfolio is agriculture + debt
+  bonds + bank FD + (later) mutual funds + equity, each with its
+  own payout rhythm and its own tax treatment.
+
+  A stream is: { name, kind, frequency, anchor month, taxable, end }
+    contract .. rate per acre ÷ 8 × kanals            (agriculture)
+    deposit ... principal × rate ÷ 100, less TDS      (FD, bonds)
+    fixed ..... a flat annual amount                  (anything known)
+    manual .... typed in each month                   (irregular)
+
+  ── The rounding rule (this is what made v4's totals drift) ────
+  Derivations carry FULL PRECISION. Rounding happens once, at the
+  moment of display. 813750/12 is 67812.5 — round it in the
+  derivation and twelve months sum to 813756, six rupees wrong.
+  Round at the edge and the year is exact.
+
+  Pot shares use largest-remainder, so the pots always sum to the
+  surplus exactly. No drifting rupees.
+
+  ── Honest limits ──────────────────────────────────────────────
+  The tax panel adds up gross, exempt and taxable income and
+  compares it to a threshold YOU set. It is arithmetic, not tax
+  advice, and it does not compute liability. Confirm with your CA.
+
+  ── Architecture ───────────────────────────────────────────────
+  1. CONTRACT  2. KERNEL  3. DERIVATIONS  4. SURFACE
+  Reads never write. Derivations never touch the DOM and never round.
+
+  Zero external dependencies. Works offline once loaded.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#E9EDF0">
+<title>Sustain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9EDF0; --surface:#FFFFFF; --sunk:#F4F6F8;
+  --ink:#16202E; --muted:#66788C; --faint:#9AA9B8;
+  --rule:#D4DCE4; --rule-strong:#B9C5D1;
+  --grow:#2E6B4F; --spend:#A8432F; --brass:#8A6B18;
+  --radius:10px;
+  --display:'Fraunces',Georgia,serif;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:820px;margin:0 auto;padding:0 14px 56px}
+h1,h2,h3{margin:0;font-weight:600}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--grow)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.hint{color:var(--faint);font-size:12px;margin:2px 0 8px}
+
+header{position:sticky;top:0;z-index:20;background:rgba(233,237,240,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--rule)}
+.hrow{max-width:820px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{font-family:var(--display);font-size:21px;letter-spacing:-.01em;line-height:1}
+.brand small{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:3px;font-weight:400}
+.ynav{display:flex;align-items:center;gap:4px}
+.ynav button{width:30px;height:30px;border:1px solid var(--rule-strong);background:var(--surface);border-radius:8px;color:var(--muted);line-height:1}
+.ynav button:hover{border-color:var(--ink);color:var(--ink)}
+.ynav .yr{font-family:var(--mono);font-size:14px;font-weight:500;min-width:46px;text-align:center}
+.months{max-width:820px;margin:0 auto;padding:0 14px 9px;display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}
+.months::-webkit-scrollbar{display:none}
+.mpill{flex:0 0 auto;padding:5px 11px;border-radius:7px;border:1px solid transparent;background:transparent;font-size:13px;color:var(--muted);position:relative}
+.mpill:hover{background:var(--surface)}
+.mpill[aria-selected=true]{background:var(--ink);color:#fff}
+.mpill .mk{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:var(--grow)}
+.mpill .mk.pay{background:var(--brass);width:5px;height:5px}
+.mpill[aria-selected=true] .mk{background:rgba(255,255,255,.7)}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:14px;margin-top:12px}
+.card>h2{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
+
+.beam{margin-top:14px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:14px}
+.beam-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.beam-fig{font-family:var(--display);font-size:32px;line-height:1.05;letter-spacing:-.02em}
+.beam-fig.neg{color:var(--spend)}
+.beam-bar{display:flex;height:26px;border-radius:6px;overflow:hidden;background:var(--sunk);border:1px solid var(--rule)}
+.seg{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;color:#fff;min-width:0;overflow:hidden;white-space:nowrap;transition:width .45s cubic-bezier(.4,0,.2,1)}
+.legend{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+
+.seg-ctl{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden;flex:0 0 auto}
+.seg-ctl button{padding:4px 10px;font-size:11.5px;background:var(--surface);border:0;color:var(--muted)}
+.seg-ctl button[aria-pressed=true]{background:var(--ink);color:#fff}
+
+.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--rule)}
+.row:first-of-type{border-top:0}
+.row.off{opacity:.55}
+.row.tot{border-top:1px solid var(--rule-strong)}
+.row .lbl{flex:1;min-width:0;font-size:14px}
+.row .sub{display:block;font-size:11px;color:var(--faint);line-height:1.35}
+.row input[type=number],.row input[type=month]{width:118px;flex:0 0 auto;text-align:right;font-family:var(--mono);font-size:14px;padding:6px 9px;border:1px solid var(--rule-strong);border-radius:7px;background:var(--sunk);color:var(--ink);outline:none}
+.row input:focus,.row select:focus{border-color:var(--ink);background:var(--surface);box-shadow:0 0 0 3px rgba(22,32,46,.08)}
+.row .derived{width:118px;flex:0 0 auto;text-align:right;font-family:var(--mono);font-size:14px;color:var(--grow);font-weight:500}
+.row .derived.mute{color:var(--muted);font-weight:400}
+.row .derived.ink{color:var(--ink)}
+.row select{font:inherit;padding:6px 9px;border:1px solid var(--rule-strong);border-radius:7px;background:var(--sunk);color:var(--ink);outline:none;max-width:150px}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
+.stream{border:1px solid var(--rule);border-radius:9px;padding:10px 12px;margin-top:10px;background:var(--sunk)}
+.stream-head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.stream-head input[type=text]{flex:1;min-width:0;font:inherit;font-weight:600;padding:5px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--ink);outline:none}
+.stream-head input[type=text]:hover{border-color:var(--rule-strong);background:var(--surface)}
+.stream-head input[type=text]:focus{border-color:var(--ink);background:var(--surface)}
+.kind{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);flex:0 0 auto}
+.x{flex:0 0 auto;width:26px;height:26px;border:1px solid var(--rule-strong);background:var(--surface);border-radius:6px;color:var(--faint);line-height:1;font-size:15px}
+.x:hover{border-color:var(--spend);color:var(--spend)}
+.stream .row{border-top-color:var(--rule)}
+
+.pot{padding:9px 0;border-top:1px solid var(--rule)}
+.pot:first-child{border-top:0}
+.pot-top{display:flex;align-items:baseline;gap:8px;font-size:13.5px}
+.pot-top .amt{margin-left:auto;font-family:var(--mono);font-weight:500}
+.pot-meta{display:flex;gap:8px;align-items:center;margin-top:5px;font-size:11px;color:var(--muted)}
+.track{flex:1;min-width:40px;height:5px;background:var(--sunk);border-radius:3px;overflow:hidden;border:1px solid var(--rule)}
+.track>span{display:block;height:100%;background:var(--brass);transition:width .5s}
+
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:12.5px}
+th,td{padding:7px 9px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule)}
+thead th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:400}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);border-right:1px solid var(--rule);font-weight:500}
+tr.now td,tr.now th:first-child{background:var(--sunk)}
+tfoot td,tfoot th{font-weight:600;border-top:2px solid var(--rule-strong);border-bottom:0}
+td.g{color:var(--grow)} td.s{color:var(--spend)} td.b{color:var(--brass)}
+
+details{margin-top:12px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius)}
+summary{padding:12px 14px;cursor:pointer;font-size:13px;font-weight:500;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:'+';font-family:var(--mono);color:var(--faint)}
+details[open]>summary::after{content:'–'}
+.dbody{padding:0 14px 14px}
+
+.btn{padding:8px 13px;border:1px solid var(--rule-strong);background:var(--surface);border-radius:8px;font-size:13px}
+.btn:hover{border-color:var(--ink)}
+.btn.warn:hover{border-color:var(--spend);color:var(--spend)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--faint);line-height:1.75}
+footer code{font-family:var(--mono);font-size:11px}
+
+#print{display:none}
+.stmt{font-size:12px;color:#000}
+.stmt h1{font-family:var(--display);font-size:22px;margin:0 0 2px}
+.stmt h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;margin:18px 0 6px;color:#444;border-bottom:1px solid #999;padding-bottom:3px}
+.stmt .meta{font-size:11px;color:#555;margin-bottom:4px}
+.stmt table{width:100%;border-collapse:collapse;font-size:10.5px;min-width:0}
+.stmt th,.stmt td{border:0;border-bottom:1px solid #DDD;padding:3px 5px;text-align:right;white-space:nowrap}
+.stmt th{text-align:right;font-weight:600;text-transform:none;letter-spacing:0;color:#333;font-family:var(--sans);font-size:10px}
+.stmt th:first-child,.stmt td:first-child{text-align:left;position:static;border-right:0}
+.stmt .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid #EEE}
+.stmt .kv .n{font-family:var(--mono)}
+.stmt .note{font-size:10px;color:#666;line-height:1.5;margin-top:4px}
+@media print{
+  body{background:#fff}
+  header,#toast,.beam,.card,.btns,details,footer{display:none!important}
+  #print{display:block!important}
+  .wrap{max-width:none;padding:0}
+  .pbreak{break-before:page;page-break-before:always}
+  a{color:#000;text-decoration:none}
+}
+#modalBack{position:fixed;inset:0;background:rgba(22,32,46,.42);display:none;align-items:center;justify-content:center;z-index:80;padding:16px}
+#modalBack.on{display:flex}
+.modal{background:var(--surface);border:1px solid var(--rule-strong);border-radius:12px;max-width:520px;width:100%;max-height:86vh;display:flex;flex-direction:column}
+.modal-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule)}
+.modal-h h3{flex:1;font-size:14px;font-weight:600}
+.modal-b{padding:6px 16px 14px;overflow:auto}
+.modal-f{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--rule)}
+.modal-f .primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.gear{width:30px;height:30px;border:1px solid var(--rule-strong);background:var(--surface);border-radius:8px;color:var(--muted);line-height:1;font-size:14px}
+.gear:hover{border-color:var(--ink);color:var(--ink)}
+#toast{position:fixed;left:50%;bottom:18px;transform:translate(-50%,14px);background:var(--ink);color:#fff;padding:9px 15px;border-radius:9px;font-size:13px;opacity:0;transition:.28s;pointer-events:none;z-index:60;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(max-width:430px){.row input[type=number],.row input[type=month],.row .derived{width:96px}.beam-fig{font-size:27px}}
+</style>
+</head>
+<body>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="modalBack" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <div class="modal-h"><h3 id="modalTitle"></h3><button class="gear" id="modalX" aria-label="Close">×</button></div>
+    <div class="modal-b" id="modalBody"></div>
+    <div class="modal-f" id="modalFoot"></div>
+  </div>
+</div>
+
+<header>
+  <div class="hrow">
+    <div class="brand">Sustain<small>ledger &amp; allocation</small></div>
+    <div class="ynav">
+      <button id="yPrev" aria-label="Previous year">‹</button>
+      <span class="yr num" id="yLbl">2026</span>
+      <button id="yNext" aria-label="Next year">›</button>
+      <button class="gear" id="gearBtn" aria-label="Statement holder details" title="Holder details">⚙</button>
+    </div>
+  </div>
+  <div class="months" id="months" role="tablist" aria-label="Month"></div>
+</header>
+
+<div class="wrap">
+  <section class="beam" aria-labelledby="beamH">
+    <div class="beam-top">
+      <div>
+        <div class="eyebrow" id="beamH">Free to allocate</div>
+        <div class="beam-fig num" id="beamFig">—</div>
+        <div class="num" id="beamIO" style="font-size:12.5px;color:var(--muted);margin-top:4px">—</div>
+      </div>
+      <span class="seg-ctl" id="modeCtl" role="group" aria-label="View">
+        <button data-mode="cash" aria-pressed="false">Cash flow</button>
+        <button data-mode="spread" aria-pressed="true">Spread</button>
+      </span>
+    </div>
+    <div class="beam-bar" id="beamBar"></div>
+    <div class="legend" id="beamLegend"></div>
+    <p class="hint" id="modeHint" style="margin-top:9px"></p>
+  </section>
+
+  <section class="card">
+    <h2>Income<span class="eyebrow" id="incEyebrow"></span></h2>
+    <div id="streamRows"></div>
+    <div class="row tot"><span class="lbl" style="font-weight:600">Total in</span><span class="derived ink" id="rTotIn">—</span></div>
+    <div class="btns">
+      <select id="addKind" aria-label="New income source type">
+        <option value="contract">Land contract (kanals)</option>
+        <option value="deposit">Deposit or bond (principal × rate)</option>
+        <option value="fixed">Fixed annual amount</option>
+        <option value="manual">Typed in each month</option>
+      </select>
+      <button class="btn" id="addStream">Add income source</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Household bills<span class="eyebrow">every month</span></h2>
+    <div id="monthlyRows"></div>
+  </section>
+
+  <section class="card">
+    <h2>Utility bills<span class="eyebrow">every second month</span></h2>
+    <div id="bimonthlyRows"></div>
+  </section>
+
+  <section class="card">
+    <h2>Allocation<span class="eyebrow" id="allocMode"></span></h2>
+    <p class="hint">Shares split whatever is left after bills, to the last rupee. Pots accumulate across the year.</p>
+    <div id="potRows"></div>
+  </section>
+
+  <div class="btns">
+    <button class="btn" id="copyPrev">Copy last month's bills</button>
+    <button class="btn warn" id="clearMonth">Clear this month</button>
+  </div>
+
+  <details id="dTax">
+    <summary>Tax position — <span id="taxPeek" class="num" style="color:var(--muted);font-weight:400">—</span></summary>
+    <div class="dbody" id="taxBody"></div>
+  </details>
+
+  <details id="dPatterns">
+    <summary>Patterns — <span id="patPeek" style="color:var(--muted);font-weight:400">—</span></summary>
+    <div class="dbody" id="patBody"></div>
+  </details>
+
+  <details id="dTable">
+    <summary>Twelve-month register</summary>
+    <div class="dbody">
+      <div class="scroll"><table id="reg"></table></div>
+      <p class="hint" style="margin-top:8px" id="regNote"></p>
+    </div>
+  </details>
+
+  <details id="dChart">
+    <summary>Income, outflow and carry</summary>
+    <div class="dbody" id="chartBox"></div>
+  </details>
+
+  <details id="dSet">
+    <summary>Settings — billing cycles &amp; pots</summary>
+    <div class="dbody" id="setBody"></div>
+  </details>
+
+  <details id="dReset">
+    <summary>Reset — try different numbers</summary>
+    <div class="dbody" id="resetBody"></div>
+  </details>
+
+  <details id="dConsole">
+    <summary>Console — <span id="conPeek" style="color:var(--muted);font-weight:400">0 entries</span></summary>
+    <div class="dbody" id="conBody"></div>
+  </details>
+
+  <details id="dDiag">
+    <summary>System check — <span id="diagPeek" style="color:var(--muted);font-weight:400">—</span></summary>
+    <div class="dbody" id="diagBody"></div>
+  </details>
+
+  <details id="dData">
+    <summary>Backup &amp; hand-off</summary>
+    <div class="dbody">
+      <p class="hint">The JSON file is the only durable copy of this ledger, and it carries this tool's origin links with it.</p>
+      <div class="btns" style="margin-top:0">
+        <button class="btn" id="expJSON">Export JSON</button>
+        <button class="btn" id="impJSON">Import JSON</button>
+        <button class="btn" id="expCSV">Export CSV (this year)</button>
+        <button class="btn" id="printStmt">Print / save as PDF</button>
+        <button class="btn" id="dlStmt">Download statement page</button>
+      </div>
+      <p class="eyebrow" style="margin:16px 0 4px">For your accountant</p>
+      <p class="hint">Raw numbers, no currency symbols, no blanks — one row per month, ready to pivot or chart. The view (cash flow or spread) is stamped in its own column so nothing is ambiguous.</p>
+      <div class="btns" style="margin-top:0">
+        <button class="btn" id="regCSV">Register CSV</button>
+        <button class="btn" id="regXLS">Register XLS</button>
+      </div>
+      <input type="file" id="fileIn" accept="application/json,.json" hidden>
+    </div>
+  </details>
+
+  <div id="print" class="stmt" aria-hidden="true"></div>
+
+  <footer id="prov"></footer>
+</div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════
+   LAYER 1 · CONTRACT
+   ══════════════════════════════════════════════════════════ */
+const PROVENANCE = {
+  tool:'Sustain', version:'v5',
+  builtWith:'Claude (Anthropic) · Opus 5',
+  created:'2026-08-06',
+  lineage:'BillFlow v2 (GLM 5.2) → Sustain v3 → v4 → v5',
+  chatUrl:'', projectUrl:'', repoUrl:'',
+  siblings:[{name:'Farm & FD calculator', url:'https://anandvip.github.io/farm-contract/'}]
+};
+
+const SCHEMA_VER = 5;
+const STORE_KEY  = 'sustain:v5';
+const LEGACY_KEYS = ['sustain:v4','sustain:v3'];
+const KANALS_PER_ACRE = 8;
+
+const MO  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MOF = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+const FREQ = {monthly:12, quarterly:4, halfyearly:2, annual:1};
+const FREQ_LABEL = {monthly:'every month', quarterly:'four times a year', halfyearly:'twice a year', annual:'once a year'};
+
+const KIND_LABEL = {contract:'land contract', deposit:'deposit / bond', fixed:'fixed annual', manual:'typed monthly'};
+
+const EXPENSES = [
+  {key:'maid',       label:'Maid',        cycle:'monthly'},
+  {key:'cook',       label:'Cook',        cycle:'monthly'},
+  {key:'milkman',    label:'Milkman',     cycle:'monthly'},
+  {key:'internet',   label:'Internet',    cycle:'monthly'},
+  {key:'kiryana',    label:'Kiryana',     cycle:'monthly'},
+  {key:'pharmacy',   label:'Pharmacy',    cycle:'monthly'},
+  {key:'fuel',       label:'Fuel',        cycle:'monthly'},
+  {key:'electricity',label:'Electricity', cycle:'bimonthly'},
+  {key:'water',      label:'Water',       cycle:'bimonthly'},
+  {key:'gas',        label:'Pipeline gas',cycle:'bimonthly'}
+];
+const BIMONTHLY = EXPENSES.filter(e=>e.cycle==='bimonthly');
+const catOf = k => EXPENSES.find(e=>e.key===k);
+const EXPENSE_KEYS = EXPENSES.map(e=>e.key);
+
+/* A fresh year's income sources. Agriculture is tax-exempt; the rest are not. */
+const DEFAULT_STREAMS = () => ([
+  {id:'farm',  name:'Farm contract', kind:'contract', freq:'halfyearly', anchor:4, taxable:false, ratePerAcre:null, kanals:null, end:''},
+  {id:'fd',    name:'Bank FD',       kind:'deposit',  freq:'halfyearly', anchor:4, taxable:true,  principal:null, rate:null, tds:0, end:''},
+  {id:'ncd',   name:'NCD coupon',    kind:'manual',   taxable:true},
+  {id:'other', name:'Other income',  kind:'manual',   taxable:true}
+]);
+
+const DEFAULTS = () => ({
+  ver:SCHEMA_VER,
+  meta:{...PROVENANCE},
+  settings:{
+    mode:'spread',
+    anchors:{electricity:2, water:2, gas:2},
+    pots:[
+      {id:'wish',   name:'Wishlist',        share:30, target:0},
+      {id:'home',   name:'Home upgrades',   share:40, target:0},
+      {id:'travel', name:'Bike / road trip',share:30, target:0}
+    ],
+    tax:{threshold:1250000},
+    holder:{}
+  },
+  years:{}
+});
+
+/* ══════════════════════════════════════════════════════════
+   LAYER 2 · KERNEL — reads never write
+   ══════════════════════════════════════════════════════════ */
+let state = DEFAULTS();
+
+const peekYear  = y => state.years[y] || null;
+const peekMonth = (y,m) => { const Y=peekYear(y); return (Y && Y.months && Y.months[m]) || null; };
+
+/* A new year inherits last year's income sources (with amounts kept, since a
+   contract usually continues) rather than starting blank. */
+function ensureYear(y){
+  if(!state.years[y]){
+    const prev = state.years[y-1];
+    state.years[y] = {
+      streams: prev && Array.isArray(prev.streams) && prev.streams.length
+        ? JSON.parse(JSON.stringify(prev.streams))
+        : DEFAULT_STREAMS(),
+      months:{}
+    };
+  }
+  const Y = state.years[y];
+  if(!Y.months) Y.months = {};
+  if(!Array.isArray(Y.streams) || !Y.streams.length) Y.streams = DEFAULT_STREAMS();
+  return Y;
+}
+function ensureMonth(y,m){ const Y=ensureYear(y); if(!Y.months[m]) Y.months[m]={}; return Y.months[m]; }
+
+/* Read-only view of a year's streams. Never creates the year. */
+function streams(y){
+  const Y = peekYear(y);
+  return (Y && Array.isArray(Y.streams) && Y.streams.length) ? Y.streams : DEFAULT_STREAMS();
+}
+const streamOf = (y,id) => streams(y).find(s=>s.id===id) || null;
+
+function read(y,m,k){
+  const d = peekMonth(y,m); if(!d) return null;
+  const v = d[k];
+  return (v!=null && v!=='') ? Number(v) : null;
+}
+function write(y,m,k,v){
+  if(v==='' || v==null){
+    const d = peekMonth(y,m);
+    if(d){ delete d[k]; prune(y,m); }
+  } else {
+    const n = Number(v);
+    if(!Number.isFinite(n)) return;
+    ensureMonth(y,m)[k] = Math.max(0, Math.round(n));
+  }
+  save();
+}
+function streamIsBlank(s){
+  if(s.kind==='contract') return s.ratePerAcre==null && s.kanals==null;
+  if(s.kind==='deposit')  return s.principal==null && s.rate==null;
+  if(s.kind==='fixed')    return s.annual==null;
+  return true;
+}
+function yearIsBlank(Y){
+  if(!Y) return true;
+  const noStreams = !Array.isArray(Y.streams) || Y.streams.every(streamIsBlank);
+  return noStreams && Object.keys(Y.months||{}).length===0;
+}
+function prune(y,m){
+  const Y = peekYear(y); if(!Y) return;
+  if(Y.months[m] && Object.keys(Y.months[m]).length===0) delete Y.months[m];
+  if(yearIsBlank(Y)) delete state.years[y];
+}
+function hasMonth(y,m){ const d=peekMonth(y,m); return !!d && Object.keys(d).length>0; }
+
+function newStreamId(y){
+  const taken = new Set([...streams(y).map(s=>s.id), ...EXPENSE_KEYS]);
+  let n = 1, id;
+  do { id = 'src'+n; n++; } while(taken.has(id));
+  return id;
+}
+
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){ toast('Could not save — storage may be full or blocked'); if(typeof logEvent==='function') logEvent('error','save failed: '+e.message); } }
+function load(){
+  let raw=null;
+  try{ raw = localStorage.getItem(STORE_KEY); }catch(e){}
+  if(!raw){ for(const k of LEGACY_KEYS){ try{ raw = localStorage.getItem(k); }catch(e){} if(raw) break; } }
+  if(!raw){ state = DEFAULTS(); return; }
+  try{ state = migrate(JSON.parse(raw)); }
+  catch(e){ state = DEFAULTS(); toast('Saved data could not be read — starting fresh'); }
+  compact();
+}
+
+/* v3/v4 stored contract{} and fd{} as fixed slots. Turn them into streams and
+   keep every rupee the person already entered. */
+function migrateYear(Y){
+  const out = {streams:[], months:(Y && Y.months && typeof Y.months==='object') ? Y.months : {}};
+  if(Y && Array.isArray(Y.streams) && Y.streams.length){
+    out.streams = Y.streams.map(s=>Object.assign({taxable:true, freq:'halfyearly', anchor:4, end:''}, s));
+    return out;
+  }
+  const c = (Y && Y.contract) || {}, f = (Y && Y.fd) || {};
+  out.streams = [
+    {id:'farm', name:'Farm contract', kind:'contract', freq:'halfyearly', anchor:Number(c.anchor)||4, taxable:false,
+     ratePerAcre:c.ratePerAcre==null?null:Number(c.ratePerAcre), kanals:c.kanals==null?null:Number(c.kanals), end:''},
+    {id:'fd', name:'Bank FD', kind:'deposit', freq:'halfyearly', anchor:Number(f.anchor)||4, taxable:true,
+     principal:f.principal==null?null:Number(f.principal), rate:f.rate==null?null:Number(f.rate), tds:Number(f.tds)||0, end:f.maturity||''},
+    {id:'ncd', name:'NCD coupon', kind:'manual', taxable:true},
+    {id:'other', name:'Other income', kind:'manual', taxable:true}
+  ];
+  return out;
+}
+function migrate(p){
+  const base = DEFAULTS();
+  if(!p || typeof p!=='object') return base;
+  base.meta = Object.assign(base.meta, p.meta||{}, {version:PROVENANCE.version, siblings:PROVENANCE.siblings});
+  base.settings = Object.assign(base.settings, p.settings||{});
+  base.settings.anchors = Object.assign({}, DEFAULTS().settings.anchors, (p.settings&&p.settings.anchors)||{});
+  base.settings.tax = Object.assign({}, DEFAULTS().settings.tax, (p.settings&&p.settings.tax)||{});
+  base.settings.holder = Object.assign({}, (p.settings&&p.settings.holder)||{});
+  if(base.settings.mode==='amort') base.settings.mode='spread';
+  if(p.settings && Array.isArray(p.settings.pots) && p.settings.pots.length) base.settings.pots = p.settings.pots;
+  const src = (p.years && typeof p.years==='object') ? p.years : {};
+  base.years = {};
+  Object.keys(src).forEach(y=>{
+    const Y = src[y];
+    if(!Y || typeof Y!=='object') return;
+    base.years[y] = migrateYear(Y);
+  });
+  return base;
+}
+function compact(){
+  Object.keys(state.years).forEach(y=>{
+    const Y = state.years[y];
+    Object.keys(Y.months).forEach(m=>{
+      const d = Y.months[m];
+      if(!d || typeof d!=='object' || Object.keys(d).length===0) delete Y.months[m];
+    });
+    if(yearIsBlank(Y)) delete state.years[y];
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   LAYER 3 · DERIVATIONS — pure, no DOM, NO ROUNDING
+   Every function here returns full precision. The surface rounds.
+   ══════════════════════════════════════════════════════════ */
+
+/* Which months a stream pays in. anchor=4, halfyearly → [4,10]. */
+function payoutMonths(freq, anchor){
+  const n = FREQ[freq];
+  if(!n) return [];
+  const a = Math.min(12, Math.max(1, Number(anchor)||1));
+  const period = 12/n;
+  const out = [];
+  for(let k=0;k<n;k++) out.push(((a-1 + k*period) % 12) + 1);
+  return out.sort((x,z)=>x-z);
+}
+function streamEnded(s,y,m){
+  if(!s.end) return false;
+  const parts = String(s.end).split('-');
+  const ey = Number(parts[0]), em = Number(parts[1]);
+  if(!ey || !em) return false;
+  return (y>ey) || (y===ey && m>em);
+}
+
+/* Gross annual, before any TDS. null when not configured. */
+function streamGross(y,s){
+  if(s.kind==='contract'){
+    if(s.ratePerAcre==null || s.kanals==null) return null;
+    return (Number(s.ratePerAcre)/KANALS_PER_ACRE) * Number(s.kanals);
+  }
+  if(s.kind==='deposit'){
+    if(s.principal==null || s.rate==null) return null;
+    return Number(s.principal) * Number(s.rate) / 100;
+  }
+  if(s.kind==='fixed') return s.annual==null ? null : Number(s.annual);
+  return null;
+}
+function streamTds(y,s){
+  const g = streamGross(y,s);
+  if(g==null) return 0;
+  return g * (Number(s.tds)||0) / 100;
+}
+/* What actually reaches the account in a year. */
+function streamNet(y,s){
+  const g = streamGross(y,s);
+  return g==null ? null : g - streamTds(y,s);
+}
+/* Manual streams: the year's total is whatever was typed in. */
+function manualAnnual(y,s){
+  let t=0;
+  for(let m=1;m<=12;m++) t += (read(y,m,s.id) || 0);
+  return t;
+}
+function streamAnnualActual(y,s){
+  return s.kind==='manual' ? manualAnnual(y,s) : (streamNet(y,s) || 0);
+}
+
+/* One stream's contribution to one month, full precision. */
+function streamIn(y,m,s,mode){
+  if(s.kind==='manual') return read(y,m,s.id) || 0;
+  const n = streamNet(y,s);
+  if(n==null) return 0;
+  if(streamEnded(s,y,m)) return 0;
+  if(mode==='spread') return n/12;
+  const ms = payoutMonths(s.freq, s.anchor);
+  return ms.includes(m) ? n/FREQ[s.freq] : 0;
+}
+function streamConfigured(y,s){
+  return s.kind==='manual' ? true : streamNet(y,s)!=null;
+}
+function isPayoutMonth(y,m){
+  return streams(y).some(s => s.kind!=='manual' && streamNet(y,s)!=null && !streamEnded(s,y,m)
+                              && payoutMonths(s.freq,s.anchor).includes(m));
+}
+
+/* When does this stream next pay, counting forward from (y,m)? */
+function nextPayoutAfter(y,m,s){
+  if(s.kind==='manual') return null;
+  const ms = payoutMonths(s.freq, s.anchor);
+  for(let k=1;k<=12;k++){
+    const abs = m+k, yy = y + Math.floor((abs-1)/12), mm = ((abs-1)%12)+1;
+    if(ms.includes(mm) && !streamEnded(s,yy,mm)) return {y:yy, m:mm};
+  }
+  return null;
+}
+
+/* Utility bills. A bill landing in month L covers L-1 and L. */
+function landsIn(key,m){
+  const c = catOf(key);
+  if(!c || c.cycle!=='bimonthly') return true;
+  const a = state.settings.anchors[key] || 1;
+  return Math.abs((m-a)%2)===0;
+}
+const nextLanding = (y,m) => m===12 ? {y:y+1,m:1} : {y,m:m+1};
+function charge(y,m,key,mode){
+  const c = catOf(key);
+  if(c.cycle==='monthly') return read(y,m,key);
+  if(mode==='cash') return landsIn(key,m) ? read(y,m,key) : null;
+  if(landsIn(key,m)){ const v=read(y,m,key); return v==null?null:v/2; }
+  const n = nextLanding(y,m); const v = read(n.y,n.m,key);
+  return v==null ? null : v/2;
+}
+function outflow(y,m,mode){
+  let t=0, any=false;
+  EXPENSES.forEach(c=>{ const v=charge(y,m,c.key,mode); if(v!=null){ t+=v; any=true; } });
+  return {total:t, any};
+}
+function inflow(y,m,mode){
+  const items = streams(y).map(s=>({id:s.id, name:s.name, kind:s.kind, amount:streamIn(y,m,s,mode)}));
+  const total = items.reduce((a,x)=>a+x.amount, 0);
+  const any = streams(y).some(s => s.kind==='manual' ? read(y,m,s.id)!=null : streamNet(y,s)!=null);
+  return {items, total, any, get:(id)=>{ const x=items.find(q=>q.id===id); return x?x.amount:0; }};
+}
+function surplus(y,m,mode){
+  const i = inflow(y,m,mode), o = outflow(y,m,mode);
+  if(!i.any && !o.any) return null;
+  return i.total - o.total;
+}
+function carryTo(y,m,mode){
+  let c=0;
+  for(let k=1;k<=m;k++){ const s=surplus(y,k,mode); if(s!=null) c+=s; }
+  return c;
+}
+
+/* Largest remainder: the pots always sum to exactly round(surplus). */
+function allocate(s){
+  const pots = state.settings.pots;
+  const shareTotal = pots.reduce((a,p)=>a+(Number(p.share)||0), 0);
+  const S = (s==null || s<=0 || shareTotal<=0) ? 0 : Math.round(s);
+  if(!S) return pots.map(p=>({...p, amount:0}));
+  const raw   = pots.map(p => S * (Number(p.share)||0) / shareTotal);
+  const floor = raw.map(v => Math.floor(v));
+  let left = S - floor.reduce((a,b)=>a+b, 0);
+  const order = raw.map((v,i)=>({frac:v-Math.floor(v), i})).sort((a,b)=>b.frac-a.frac || a.i-b.i);
+  for(let k=0; left>0 && k<order.length*2; k++){ floor[order[k%order.length].i]++; left--; }
+  return pots.map((p,i)=>({...p, amount:floor[i]}));
+}
+function potYTD(y,id,mode){
+  let t=0;
+  for(let m=1;m<=12;m++){
+    const s = surplus(y,m,mode);
+    if(s==null || s<=0) continue;
+    const a = allocate(s).find(p=>p.id===id);
+    if(a) t += a.amount;
+  }
+  return t;
+}
+
+function yearTotals(y,mode){
+  let inc=0, out=0, months=0;
+  for(let m=1;m<=12;m++){
+    const i = inflow(y,m,mode), o = outflow(y,m,mode);
+    if(!i.any && !o.any) continue;
+    inc += i.total; out += o.total;
+    if(hasMonth(y,m)) months++;   /* recorded by hand, not merely accrued */
+  }
+  return {inc, out, months, net:inc-out};
+}
+
+/* Tax arithmetic only — never advice, never a liability calculation. */
+function taxSummary(y){
+  let gross=0, exempt=0, taxable=0, tds=0;
+  streams(y).forEach(s=>{
+    const g = s.kind==='manual' ? manualAnnual(y,s) : (streamGross(y,s) || 0);
+    gross += g;
+    if(s.taxable) taxable += g; else exempt += g;
+    tds += s.kind==='manual' ? 0 : streamTds(y,s);
+  });
+  const threshold = Number(state.settings.tax.threshold) || 0;
+  return {gross, exempt, taxable, tds, threshold, over:Math.max(0, taxable-threshold), net:gross-tds};
+}
+
+/* Patterns emerge from data, not from wishes. Below three filled months this
+   returns ready:false and the surface says so rather than inventing a trend. */
+function patternReport(y,mode){
+  const filled=[];
+  for(let m=1;m<=12;m++){
+    /* Derived income accrues in every month whether or not you have touched it.
+       A month is RECORDED only when something was actually entered — otherwise
+       one month of data would masquerade as a full year. */
+    if(!hasMonth(y,m)) continue;
+    const i=inflow(y,m,mode), o=outflow(y,m,mode);
+    filled.push({m, inc:i.total, out:o.total, items:i.items});
+  }
+  const out = {months:filled.length, ready:filled.length>=3, items:[]};
+  if(!out.ready) return out;
+
+  const incT = filled.reduce((a,r)=>a+r.inc,0);
+  const outT = filled.reduce((a,r)=>a+r.out,0);
+  const add = (title,value,note)=>out.items.push({title,value,note});
+
+  add('Kept, not spent',
+      incT>0 ? Math.round((incT-outT)/incT*100)+'%' : '—',
+      `${money(incT-outT)} held back from ${money(incT)} across ${filled.length} months`);
+
+  const withBills = filled.filter(r=>r.out>0);
+  if(withBills.length>=2){
+    const hi = withBills.reduce((a,b)=>b.out>a.out?b:a);
+    const lo = withBills.reduce((a,b)=>b.out<a.out?b:a);
+    add('Spending swing', money(hi.out-lo.out),
+        `heaviest ${MOF[hi.m-1]} at ${money(hi.out)}, lightest ${MOF[lo.m-1]} at ${money(lo.out)}`);
+    add('Typical month', money(outT/withBills.length),
+        `average outflow across ${withBills.length} months with bills`);
+  }
+
+  let trough=null;
+  for(const r of filled){ const c=carryTo(y,r.m,mode); if(trough===null||c<trough.c) trough={m:r.m, c}; }
+  if(trough) add('Thinnest point', money(trough.c),
+      `running balance bottoms out in ${MOF[trough.m-1]} — the float the year has to survive on`);
+
+  const catTot = EXPENSES.map(c=>{
+    let t=0; for(let m=1;m<=12;m++){ const v=charge(y,m,c.key,mode); if(v!=null) t+=v; }
+    return {label:c.label, t};
+  }).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+  if(catTot.length){
+    add('Largest outgoing', catTot[0].label,
+        `${money(catTot[0].t)}, ${outT>0?Math.round(catTot[0].t/outT*100):0}% of everything spent`);
+  }
+
+  const byStream = {};
+  filled.forEach(r=>r.items.forEach(x=>{ byStream[x.name]=(byStream[x.name]||0)+x.amount; }));
+  const top = Object.entries(byStream).sort((a,b)=>b[1]-a[1])[0];
+  if(top && incT>0) add('Leans most on', top[0],
+      `${Math.round(top[1]/incT*100)}% of income — concentration is a risk worth naming`);
+
+  if(withBills.length>=4){
+    const half = Math.floor(withBills.length/2);
+    const early = withBills.slice(0,half).reduce((a,r)=>a+r.out,0)/half;
+    const late  = withBills.slice(half).reduce((a,r)=>a+r.out,0)/(withBills.length-half);
+    const pct = early>0 ? Math.round((late-early)/early*100) : 0;
+    add('Direction of travel', (pct>0?'+':'')+pct+'%',
+        pct>0 ? 'later months are costing more than earlier ones'
+              : pct<0 ? 'later months are costing less than earlier ones'
+                      : 'spending is holding steady');
+  }
+  const deficits = filled.filter(r=>r.inc-r.out<0).length;
+  if(deficits) add('Months in deficit', String(deficits),
+      mode==='cash' ? 'expected between payouts — read alongside the thinnest point'
+                    : 'in the levelled view a deficit means bills genuinely exceed income');
+  return out;
+}
+
+function money(n){
+  if(n==null || !Number.isFinite(Number(n))) return '—';
+  let v = Math.round(Number(n));
+  const neg = v<0; v = Math.abs(v);
+  const s = String(v);
+  const r = s.length<=3 ? s : s.slice(0,-3).replace(/\B(?=(\d{2})+(?!\d))/g,',') + ',' + s.slice(-3);
+  return (neg?'−':'') + '₹' + r;
+}
+function moneyShort(n){
+  if(n==null || !Number.isFinite(Number(n))) return '—';
+  let v = Number(n); const neg = v<0; v = Math.abs(v);
+  let r;
+  if(v>=1e7) r=(v/1e7).toFixed(2).replace(/\.?0+$/,'')+'Cr';
+  else if(v>=1e5) r=(v/1e5).toFixed(2).replace(/\.?0+$/,'')+'L';
+  else if(v>=1e3) r=(v/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+  else r=String(Math.round(v));
+  return (neg?'−':'')+'₹'+r;
+}
+/* ═════════ END DERIVATIONS — everything below touches the DOM ═════════ */
+
+/* ══════════════════════════════════════════════════════════
+   LAYER 4 · SURFACE
+   ══════════════════════════════════════════════════════════ */
+const $ = s => document.querySelector(s);
+let year, month;
+const mode = () => state.settings.mode;
+
+function toast(msg, sticky){
+  const t=$('#toast');
+  t.innerHTML = `<span>${esc(msg)}</span><button aria-label="Dismiss" style="margin-left:12px;background:none;border:0;color:inherit;font-size:15px;line-height:1;padding:0;cursor:pointer;pointer-events:auto">×</button>`;
+  t.style.pointerEvents='auto';
+  t.querySelector('button').onclick=()=>t.classList.remove('on');
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  if(!sticky) toast._t=setTimeout(()=>t.classList.remove('on'),3400);
+  logEvent('ui','toast: '+msg);
+}
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderMonths(){
+  $('#months').innerHTML = MO.map((n,i)=>{
+    const m=i+1;
+    const mark = isPayoutMonth(year,m) ? '<span class="mk pay" title="income instalment"></span>'
+               : (hasMonth(year,m) ? '<span class="mk"></span>' : '');
+    return `<button class="mpill" role="tab" data-m="${m}" aria-selected="${m===month}">${n}${mark}</button>`;
+  }).join('');
+}
+
+function renderBeam(){
+  const i=inflow(year,month,mode()), o=outflow(year,month,mode()), s=surplus(year,month,mode());
+  $('#beamFig').textContent = s==null ? '—' : money(s);
+  $('#beamFig').classList.toggle('neg', s!=null && s<0);
+  $('#beamIO').textContent = (i.any||o.any)
+    ? `${moneyShort(i.total)} in · ${moneyShort(o.total)} out · carry ${moneyShort(carryTo(year,month,mode()))}` : '—';
+  document.querySelectorAll('#modeCtl button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.mode===mode())));
+  $('#modeHint').textContent = mode()==='cash'
+    ? 'Cash flow — instalments and bills sit in the month they actually move. Use this to check the account survives the gap between payouts.'
+    : 'Spread — every lump is levelled across the months it covers. Use this to decide what you can commit to every month.';
+  $('#incEyebrow').textContent = mode()==='cash' ? 'as paid' : 'levelled';
+  $('#allocMode').textContent = (s!=null && s>0) ? (mode()==='cash'?'of this month\u2019s cash surplus':'of this month\u2019s levelled surplus') : 'nothing to split';
+
+  const pots = allocate(s), bar=$('#beamBar'), leg=$('#beamLegend');
+  if(!i.any && !o.any){ bar.innerHTML=''; leg.innerHTML='<span>Add an income source and enter bills to see the split.</span>'; return; }
+  const base = Math.max(i.total, o.total, 1);
+  const shades = ['#8A6B18','#A98A2E','#C4A64C','#7A5F16'];
+  let html = `<div class="seg" style="width:${(o.total/base*100).toFixed(2)}%;background:var(--spend)" title="Bills ${money(o.total)}">${o.total/base>0.16?'Bills':''}</div>`;
+  if(s!=null && s>0) pots.forEach((p,ix)=>{
+    const w = p.amount/base*100;
+    html += `<div class="seg" style="width:${w.toFixed(2)}%;background:${shades[ix%shades.length]}" title="${esc(p.name)} ${money(p.amount)}">${w>16?esc(String(p.name).split(' ')[0]):''}</div>`;
+  });
+  bar.innerHTML = html;
+  leg.innerHTML = `<span><i style="background:var(--spend)"></i>Bills ${money(o.total)}</span>` +
+    (s!=null && s>0
+      ? pots.map((p,ix)=>`<span><i style="background:${shades[ix%shades.length]}"></i>${esc(p.name)} ${money(p.amount)}</span>`).join('')
+      : `<span style="color:var(--spend)">Bills exceed income this month${mode()==='cash'?' — expected between instalments, check Carry':''}.</span>`);
+}
+
+/* Labels and values for one stream — one source of truth, used by both
+   the full render and the in-place refresh, so they cannot drift apart. */
+function streamLines(s){
+  const amt = streamIn(year,month,s,mode());
+  const net = streamNet(year,s);
+  if(s.kind==='manual') return {amt, sub:'entered by hand each month'};
+  if(net==null) return {amt, sub:'not set up yet — fill the fields above'};
+  if(streamEnded(s,year,month)) return {amt, sub:'ended — no longer paying'};
+  if(mode()==='cash'){
+    if(payoutMonths(s.freq,s.anchor).includes(month))
+      return {amt, sub:`payout month — ${money(net/FREQ[s.freq])} of ${money(net)} a year`};
+    const np = nextPayoutAfter(year,month,s);
+    return {amt, sub: np
+      ? `nothing lands this month — next payout ${MOF[np.m-1]}${np.y!==year?' '+np.y:''} · ${money(net/FREQ[s.freq])}. Switch to Spread for the monthly figure (${money(net/12)}).`
+      : 'no further payouts — this source has ended'};
+  }
+  return {amt, sub:`${money(net)} a year ÷ 12`};
+}
+
+function streamBlock(s){
+  const monthOpts = a => MO.map((n,ix)=>`<option value="${ix+1}" ${ix+1===Number(a)?'selected':''}>${n}</option>`).join('');
+  const freqOpts = f => Object.keys(FREQ).map(k=>`<option value="${k}" ${k===f?'selected':''}>${FREQ_LABEL[k]}</option>`).join('');
+  const L = streamLines(s);
+  const gross = streamGross(year,s), net = streamNet(year,s), tds = streamTds(year,s);
+  let body = '';
+
+  if(s.kind==='contract'){
+    body = `
+      <div class="row"><span class="lbl">Contract rate per acre<span class="sub">annual, as agreed</span></span>
+        <input type="number" inputmode="numeric" min="0" data-scope="stream" data-id="${s.id}" data-key="ratePerAcre" value="${s.ratePerAcre==null?'':s.ratePerAcre}" placeholder="0" aria-label="Contract rate per acre"></div>
+      <div class="row"><span class="lbl">Kanals under contract<span class="sub">${KANALS_PER_ACRE} kanals = 1 acre</span></span>
+        <input type="number" inputmode="numeric" min="0" data-scope="stream" data-id="${s.id}" data-key="kanals" value="${s.kanals==null?'':s.kanals}" placeholder="0" aria-label="Kanals under contract"></div>
+      <div class="row"><span class="lbl">Rate per kanal<span class="sub">per acre ÷ ${KANALS_PER_ACRE}</span></span>
+        <span class="derived mute" id="dA_${s.id}">${s.ratePerAcre==null?'—':money(Number(s.ratePerAcre)/KANALS_PER_ACRE)}</span></div>`;
+  } else if(s.kind==='deposit'){
+    body = `
+      <div class="row"><span class="lbl">Principal</span>
+        <input type="number" inputmode="numeric" min="0" data-scope="stream" data-id="${s.id}" data-key="principal" value="${s.principal==null?'':s.principal}" placeholder="0" aria-label="Principal"></div>
+      <div class="row"><span class="lbl">Rate of interest<span class="sub">% per year</span></span>
+        <input type="number" inputmode="decimal" min="0" step="0.01" data-scope="stream" data-id="${s.id}" data-key="rate" value="${s.rate==null?'':s.rate}" placeholder="0" aria-label="Rate of interest"></div>
+      <div class="row"><span class="lbl">TDS<span class="sub">% deducted at source — leave 0 if none</span></span>
+        <input type="number" inputmode="decimal" min="0" step="0.01" data-scope="stream" data-id="${s.id}" data-key="tds" value="${s.tds==null?'':s.tds}" placeholder="0" aria-label="TDS rate"></div>
+      <div class="row"><span class="lbl">Gross interest a year</span><span class="derived mute" id="dA_${s.id}">${money(gross)}</span></div>
+      <div class="row"><span class="lbl">Less TDS</span><span class="derived mute" id="dT_${s.id}">${gross==null?'—':'−'+money(tds)}</span></div>`;
+  } else if(s.kind==='fixed'){
+    body = `
+      <div class="row"><span class="lbl">Amount a year<span class="sub">what this source pays annually</span></span>
+        <input type="number" inputmode="numeric" min="0" data-scope="stream" data-id="${s.id}" data-key="annual" value="${s.annual==null?'':s.annual}" placeholder="0" aria-label="Annual amount"></div>
+      <div class="row"><span class="lbl">TDS<span class="sub">% deducted at source</span></span>
+        <input type="number" inputmode="decimal" min="0" step="0.01" data-scope="stream" data-id="${s.id}" data-key="tds" value="${s.tds==null?'':s.tds}" placeholder="0" aria-label="TDS rate"></div>`;
+  } else {
+    const v = read(year,month,s.id);
+    body = `
+      <div class="row"><span class="lbl">Amount for ${MOF[month-1]}<span class="sub">enter what actually landed</span></span>
+        <input type="number" inputmode="numeric" min="0" step="1" data-scope="month" data-key="${s.id}" value="${v==null?'':v}" placeholder="0" aria-label="${esc(s.name)} amount"></div>`;
+  }
+
+  const schedule = s.kind==='manual' ? '' : `
+      <div class="row"><span class="lbl">Paid<span class="sub">how often it reaches the account</span></span>
+        <select data-scope="stream" data-id="${s.id}" data-key="freq" aria-label="Payout frequency">${freqOpts(s.freq||'halfyearly')}</select></div>
+      <div class="row"><span class="lbl">First payout month<span class="sub">the rest follow at that interval</span></span>
+        <select data-scope="stream" data-id="${s.id}" data-key="anchor" aria-label="First payout month">${monthOpts(s.anchor||1)}</select></div>
+      <div class="row"><span class="lbl">Ends after<span class="sub">maturity or contract end — leave blank if open</span></span>
+        <input type="month" data-scope="stream" data-id="${s.id}" data-key="end" value="${s.end||''}" aria-label="End month"></div>
+      <div class="row"><span class="lbl">Net a year<span class="sub">after TDS</span></span><span class="derived" id="dN_${s.id}">${money(net)}</span></div>
+      <div class="row"><span class="lbl">Each payout</span><span class="derived mute" id="dP_${s.id}">${net==null?'—':money(net/FREQ[s.freq||'halfyearly'])}</span></div>`;
+
+  return `<div class="stream">
+    <div class="stream-head">
+      <input type="text" data-scope="stream" data-id="${s.id}" data-key="name" value="${esc(s.name)}" aria-label="Income source name">
+      <span class="kind">${KIND_LABEL[s.kind]}</span>
+      <button class="x" data-remove="${s.id}" aria-label="Remove ${esc(s.name)}">×</button>
+    </div>
+    ${body}
+    ${schedule}
+    ${instrumentBlock(s)}
+    <div class="row"><span class="lbl">Taxable<span class="sub">agricultural income is exempt</span></span>
+      <select data-scope="stream" data-id="${s.id}" data-key="taxable" aria-label="Taxable">
+        <option value="yes" ${s.taxable?'selected':''}>Taxable</option>
+        <option value="no" ${s.taxable?'':'selected'}>Exempt</option>
+      </select></div>
+    <div class="row tot ${L.amt?'':'off'}" id="row_${s.id}"><span class="lbl" style="font-weight:600">Counted this month<span class="sub" id="sub_${s.id}">${L.sub}</span></span>
+      <span class="derived ${L.amt?'':'mute'}" id="amt_${s.id}">${(streamConfigured(year,s)&&L.amt)?money(L.amt):'—'}</span></div>
+  </div>`;
+}
+
+function renderStreams(){
+  $('#streamRows').innerHTML = streams(year).map(streamBlock).join('');
+  const i = inflow(year,month,mode());
+  $('#rTotIn').textContent = i.any ? money(i.total) : '—';
+}
+
+/* Update every derived figure in place. Never touches an input, so focus and
+   the caret survive typing. */
+function refreshDerived(){
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  streams(year).forEach(s=>{
+    const gross = streamGross(year,s), net = streamNet(year,s), L = streamLines(s);
+    if(s.kind==='contract') set('dA_'+s.id, s.ratePerAcre==null?'—':money(Number(s.ratePerAcre)/KANALS_PER_ACRE));
+    if(s.kind==='deposit'){ set('dA_'+s.id, money(gross)); set('dT_'+s.id, gross==null?'—':'−'+money(streamTds(year,s))); }
+    set('dN_'+s.id, money(net));
+    set('dP_'+s.id, net==null?'—':money(net/FREQ[s.freq||'halfyearly']));
+    set('amt_'+s.id, (streamConfigured(year,s)&&L.amt)?money(L.amt):'—');
+    set('sub_'+s.id, L.sub);
+    const row = document.getElementById('row_'+s.id), amt = document.getElementById('amt_'+s.id);
+    if(row) row.classList.toggle('off', !L.amt);
+    if(amt) amt.classList.toggle('mute', !L.amt);
+  });
+  const i = inflow(year,month,mode());
+  set('rTotIn', i.any ? money(i.total) : '—');
+}
+
+function expenseRow(c){
+  const v = read(year,month,c.key);
+  if(c.cycle==='monthly')
+    return `<div class="row"><span class="lbl">${c.label}</span>
+      <input type="number" inputmode="numeric" min="0" step="1" data-scope="month" data-key="${c.key}" value="${v==null?'':v}" placeholder="0" aria-label="${c.label}"></div>`;
+  const anchor = state.settings.anchors[c.key]||1;
+  if(landsIn(c.key,month))
+    return `<div class="row"><span class="lbl">${c.label}<span class="sub">covers ${MOF[(month+10)%12]} &amp; ${MOF[month-1]}</span></span>
+      <input type="number" inputmode="numeric" min="0" step="1" data-scope="month" data-key="${c.key}" value="${v==null?'':v}" placeholder="0" aria-label="${c.label}"></div>`;
+  const n = nextLanding(year,month);
+  const cyc = MO.filter((_,ix)=>Math.abs((ix+1-anchor)%2)===0).join(' · ');
+  const shown = mode()==='spread' ? charge(year,month,c.key,'spread') : null;
+  return `<div class="row off"><span class="lbl">${c.label}<span class="sub">no bill this month — billed in ${MOF[n.m-1]} (${cyc})</span></span>
+    <span class="derived mute">${mode()==='spread' && shown!=null ? money(shown) : '—'}</span></div>`;
+}
+function renderExpenses(){
+  $('#monthlyRows').innerHTML   = EXPENSES.filter(c=>c.cycle==='monthly').map(expenseRow).join('');
+  $('#bimonthlyRows').innerHTML = BIMONTHLY.map(expenseRow).join('');
+}
+
+function renderPots(){
+  const s = surplus(year,month,mode());
+  $('#potRows').innerHTML = allocate(s).map(p=>{
+    const ytd = potYTD(year,p.id,mode());
+    const target = Number(p.target)||0;
+    const pct = target>0 ? Math.min(100, ytd/target*100) : 0;
+    const eta = (target>0 && p.amount>0 && ytd<target) ? Math.ceil((target-ytd)/p.amount) : null;
+    return `<div class="pot">
+      <div class="pot-top"><strong>${esc(p.name)}</strong><span class="eyebrow">${p.share}%</span><span class="amt">${money(p.amount)}</span></div>
+      <div class="pot-meta">
+        <span class="num">${money(ytd)}${target>0?' of '+money(target):''}</span>
+        <span class="track"><span style="width:${pct.toFixed(1)}%"></span></span>
+        <span>${target>0 ? (ytd>=target?'reached':(eta?eta+' mo to go':'—')) : 'no target'}</span>
+      </div></div>`;
+  }).join('');
+}
+
+function renderTax(){
+  const t = taxSummary(year);
+  $('#taxPeek').textContent = t.gross ? `${moneyShort(t.taxable)} taxable of ${moneyShort(t.gross)}` : '—';
+  $('#taxBody').innerHTML = `
+    <div class="row"><span class="lbl">Gross income this year<span class="sub">every source, before TDS</span></span><span class="derived ink num">${money(t.gross)}</span></div>
+    <div class="row"><span class="lbl">Exempt<span class="sub">sources marked exempt, e.g. agricultural</span></span><span class="derived mute num">${money(t.exempt)}</span></div>
+    <div class="row"><span class="lbl">Taxable<span class="sub">sources marked taxable</span></span><span class="derived num">${money(t.taxable)}</span></div>
+    <div class="row"><span class="lbl">TDS already deducted</span><span class="derived mute num">${money(t.tds)}</span></div>
+    <div class="row"><span class="lbl">Your threshold<span class="sub">set this yourself — confirm the figure with your CA</span></span>
+      <input type="number" inputmode="numeric" min="0" data-scope="tax" data-key="threshold" value="${state.settings.tax.threshold||''}" placeholder="0" aria-label="Tax threshold"></div>
+    <div class="row tot"><span class="lbl" style="font-weight:600">Taxable income over threshold</span>
+      <span class="derived num" style="color:${t.over>0?'var(--spend)':'var(--grow)'}">${money(t.over)}</span></div>
+    <p class="hint">This is arithmetic, not tax advice. It adds your sources up and compares them to a number you set — it does not compute what you owe, and it knows nothing about deductions, slabs, capital gains or set-offs. Take it to your CA.</p>
+    <p class="hint">Manual sources count only what you have actually entered so far this year, so this figure grows as the year fills in.</p>`;
+}
+
+function renderRegister(){
+  const ss = streams(year), pots = state.settings.pots;
+  const head = ['Month', ...ss.map(s=>s.name), 'In','Bills','Surplus','Carry', ...pots.map(p=>p.name)];
+  let h = '<thead><tr>' + head.map(t=>`<th scope="col">${esc(t)}</th>`).join('') + '</tr></thead><tbody>';
+  const colTot = ss.map(()=>0);
+  let inc=0, out=0;
+  for(let m=1;m<=12;m++){
+    const i=inflow(year,m,mode()), o=outflow(year,m,mode()), s=surplus(year,m,mode()), a=allocate(s);
+    const live = (i.any||o.any);
+    if(live){ inc+=i.total; out+=o.total; i.items.forEach((x,ix)=>colTot[ix]+=x.amount); }
+    h += `<tr class="${m===month?'now':''}"><th scope="row">${MO[m-1]}</th>`;
+    i.items.forEach(x=>{ h += `<td class="num">${x.amount?money(x.amount):'—'}</td>`; });
+    h += `<td class="num g">${live?money(i.total):'—'}</td>`;
+    h += `<td class="num s">${o.any?money(o.total):'—'}</td>`;
+    h += `<td class="num ${s==null?'':s>=0?'g':'s'}">${s==null?'—':money(s)}</td>`;
+    const cy = carryTo(year,m,mode());
+    h += `<td class="num ${cy>=0?'b':'s'}">${live?money(cy):'—'}</td>`;
+    pots.forEach(p=>{ const x=a.find(q=>q.id===p.id); h += `<td class="num">${(s!=null&&s>0)?money(x.amount):'—'}</td>`; });
+    h += '</tr>';
+  }
+  h += '</tbody><tfoot><tr><th scope="row">Year</th>';
+  colTot.forEach(v=>{ h += `<td class="num">${money(v)}</td>`; });
+  h += `<td class="num g">${money(inc)}</td><td class="num s">${money(out)}</td>`;
+  h += `<td class="num ${inc-out>=0?'g':'s'}">${money(inc-out)}</td><td></td>`;
+  pots.forEach(p=>{ h += `<td class="num">${money(potYTD(year,p.id,mode()))}</td>`; });
+  h += '</tr></tfoot>';
+  $('#reg').innerHTML = h;
+  $('#regNote').textContent = mode()==='spread'
+    ? 'Spread view: half of a bill that arrives in January belongs to last December, so a year of levelled bills will not equal the bills you typed into this year. Switch to Cash flow to reconcile against the bank.'
+    : 'Cash flow view: every figure sits in the month the money actually moved. Carry is the running balance from January — watch how deep it dips between instalments.';
+}
+
+function renderChart(){
+  const W=680,H=250,pad={l:56,r:12,t:14,b:26};
+  const iw=W-pad.l-pad.r, ih=H-pad.t-pad.b;
+  const inc=[],out=[],car=[];
+  for(let m=1;m<=12;m++){
+    const i=inflow(year,m,mode()), o=outflow(year,m,mode());
+    const live=(i.any||o.any);
+    inc.push(live?i.total:null); out.push(o.any?o.total:null); car.push(live?carryTo(year,m,mode()):null);
+  }
+  const vals=[...inc,...out,...car].filter(v=>v!=null);
+  const hi=Math.max(1,...vals), lo=Math.min(0,...vals);
+  const y=v => pad.t + ih - ((v-lo)/(hi-lo||1))*ih;
+  const step=iw/12, bw=Math.min(16,step*0.34);
+  let g='';
+  for(let k=0;k<=4;k++){
+    const v=lo+(hi-lo)*k/4, yy=y(v);
+    g += `<line x1="${pad.l}" y1="${yy.toFixed(1)}" x2="${W-pad.r}" y2="${yy.toFixed(1)}" stroke="${Math.abs(v)<1?'#B9C5D1':'#D4DCE4'}" stroke-width="1"/>`;
+    g += `<text x="${pad.l-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="10" fill="#9AA9B8">${moneyShort(v)}</text>`;
+  }
+  let bars='', ip=[], cp=[];
+  for(let m=0;m<12;m++){
+    const cx=pad.l+step*m+step/2;
+    bars += `<text x="${cx}" y="${H-8}" text-anchor="middle" font-family="IBM Plex Sans,sans-serif" font-size="10" fill="#9AA9B8">${MO[m]}</text>`;
+    if(out[m]!=null){
+      const yy=y(out[m]), y0=y(0);
+      bars += `<rect x="${(cx-bw/2).toFixed(1)}" y="${Math.min(yy,y0).toFixed(1)}" width="${bw}" height="${Math.abs(y0-yy).toFixed(1)}" rx="2" fill="#A8432F" opacity=".85"><title>${MOF[m]} bills ${money(out[m])}</title></rect>`;
+    }
+    if(inc[m]!=null) ip.push([cx,y(inc[m]),m]);
+    if(car[m]!=null) cp.push([cx,y(car[m]),m]);
+  }
+  let lines='';
+  if(cp.length>1) lines += `<polyline fill="none" stroke="#8A6B18" stroke-width="1.5" stroke-dasharray="4 3" points="${cp.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`;
+  if(ip.length>1) lines += `<polyline fill="none" stroke="#2E6B4F" stroke-width="2" stroke-linejoin="round" points="${ip.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`;
+  ip.forEach(p=>{ lines += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="#FFF" stroke="#2E6B4F" stroke-width="2"><title>${MOF[p[2]]} income ${money(inc[p[2]])}</title></circle>`; });
+
+  $('#chartBox').innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Income, bills and running carry for ${year}">${g}${bars}${lines}</svg>
+     <div class="legend"><span><i style="background:#2E6B4F"></i>Income</span><span><i style="background:#A8432F"></i>Bills</span><span><i style="background:#8A6B18"></i>Carry (running)</span><span>${mode()==='cash'?'cash-flow view':'levelled view'}</span></div>`;
+}
+
+function renderSettings(){
+  $('#setBody').innerHTML = `
+    <p class="eyebrow" style="margin:8px 0 4px">Utility billing cycles</p>
+    ${BIMONTHLY.map(c=>{
+      const a=state.settings.anchors[c.key]||1;
+      return `<div class="row"><span class="lbl">${c.label}<span class="sub">bills every second month</span></span>
+        <select data-scope="anchor" data-key="${c.key}" aria-label="${c.label} first billing month">
+          ${MO.map((n,ix)=>`<option value="${ix+1}" ${ix+1===a?'selected':''}>${n}</option>`).join('')}
+        </select></div>`;
+    }).join('')}
+    <p class="hint">Pick the first month of the year each bill arrives; every second month follows.</p>
+    <p class="eyebrow" style="margin:16px 0 4px">Pots</p>
+    ${state.settings.pots.map(p=>`<div class="row"><span class="lbl">
+        <input type="text" data-scope="pot" data-id="${p.id}" data-key="name" value="${esc(p.name)}" aria-label="Pot name" style="width:100%;font:inherit;padding:6px 9px;border:1px solid var(--rule-strong);border-radius:7px;background:var(--sunk)">
+        <span class="sub">share of surplus &amp; target</span></span>
+      <input type="number" inputmode="numeric" min="0" max="100" data-scope="pot" data-id="${p.id}" data-key="share" value="${p.share}" aria-label="${esc(p.name)} share percent" style="width:62px">
+      <input type="number" inputmode="numeric" min="0" data-scope="pot" data-id="${p.id}" data-key="target" value="${p.target||''}" placeholder="target" aria-label="${esc(p.name)} target" style="width:106px"></div>`).join('')}
+    <p class="hint">Shares are normalised, so they need not add to 100.</p>`;
+}
+
+function renderProvenance(){
+  const m = state.meta || PROVENANCE;
+  const link=(u,t)=> u ? `<a href="${u}">${t}</a>` : `<code>${t.toLowerCase()} not set</code>`;
+  const sib = (m.siblings||[]).map(s=>`<a href="${s.url}">${s.name}</a>`).join(' · ');
+  $('#prov').innerHTML =
+    `<strong>${m.tool} ${m.version}</strong> · ${m.builtWith} · ${m.created}<br>
+     ${m.lineage}<br>
+     Built in: ${link(m.chatUrl,'This chat')} · ${link(m.projectUrl,'Project')} · ${link(m.repoUrl,'Repo')}<br>
+     ${sib?'Related tools: '+sib+'<br>':''}
+     Data lives in this browser only. Export regularly.`;
+}
+
+function renderAll(){
+  $('#yLbl').textContent = year;
+  renderMonths(); renderBeam(); renderStreams(); renderExpenses();
+  renderPots(); renderTax(); renderRegister(); renderChart(); renderSettings(); renderPatterns(); renderConsole(); renderDiagnostics(); renderReset(); renderProvenance();
+}
+function renderLive(){ renderBeam(); renderPots(); renderTax(); renderRegister(); renderChart(); renderPatterns(); refreshDerived(); }
+
+/* actions */
+function addStream(kind){
+  const Y = ensureYear(year);
+  const id = newStreamId(year);
+  const base = {id, name:'New source', kind, taxable:true};
+  if(kind==='contract') Object.assign(base, {freq:'halfyearly', anchor:4, ratePerAcre:null, kanals:null, end:''});
+  if(kind==='deposit')  Object.assign(base, {freq:'halfyearly', anchor:4, principal:null, rate:null, tds:0, end:''});
+  if(kind==='fixed')    Object.assign(base, {freq:'annual', anchor:4, annual:null, tds:0, end:''});
+  Y.streams.push(base);
+  save(); renderAll();
+  toast('Added an income source — give it a name');
+}
+async function removeStream(id){
+  const Y = ensureYear(year);
+  const s = Y.streams.find(x=>x.id===id); if(!s) return;
+  if(!await confirmModal('Remove income source', `Remove “${s.name}” from ${year}?\n\nAmounts you typed by hand into past months stay in the file, but stop being counted.`, 'Remove')) return;
+  Y.streams = Y.streams.filter(x=>x.id!==id);
+  if(!Y.streams.length) Y.streams = DEFAULT_STREAMS();
+  save(); renderAll(); toast('Source removed');
+}
+/* ── Resets ───────────────────────────────────────────────
+   Every reset is scoped, counted before it runs, and reversible
+   once. The snapshot is held in memory only — an export is still
+   the durable backup. */
+let undoSnap = null;
+
+function snapshot(label){ undoSnap = {label, json:JSON.stringify(state)}; }
+function undoReset(){
+  if(!undoSnap) return;
+  state = JSON.parse(undoSnap.json);
+  const what = undoSnap.label; undoSnap = null;
+  save(); renderAll(); toast('Restored — ' + what + ' is back');
+}
+function countBillEntries(y){
+  let n=0;
+  for(let m=1;m<=12;m++){ const d=peekMonth(y,m); if(!d) continue; EXPENSE_KEYS.forEach(k=>{ if(d[k]!=null) n++; }); }
+  return n;
+}
+function countTypedIncome(y){
+  const ids = streams(y).filter(s=>s.kind==='manual').map(s=>s.id);
+  let n=0;
+  for(let m=1;m<=12;m++){ const d=peekMonth(y,m); if(!d) continue; ids.forEach(k=>{ if(d[k]!=null) n++; }); }
+  return n;
+}
+function stripKeys(y, keys, onlyMonth){
+  let n=0;
+  const from = onlyMonth||1, to = onlyMonth||12;
+  for(let m=from;m<=to;m++){
+    const d = peekMonth(y,m); if(!d) continue;
+    keys.forEach(k=>{ if(d[k]!=null){ delete d[k]; n++; } });
+    prune(y,m);
+  }
+  return n;
+}
+async function doReset(kind){
+  const Y = peekYear(year);
+  let msg='', run=null, label='';
+
+  if(kind==='income'){
+    label='income sources';
+    msg=`Reset the income sources for ${year} back to the four defaults?\n\nRates, principals, payout months and end dates are cleared.\nAmounts you typed into months are kept.`;
+    run=()=>{ ensureYear(year).streams = DEFAULT_STREAMS(); };
+  }
+  else if(kind==='typed'){
+    const n = countTypedIncome(year);
+    label='typed income';
+    msg=`Clear ${n} typed income ${n===1?'entry':'entries'} across ${year}?\n\nThis is the NCD coupon and anything else typed by hand.\nContract and deposit settings are kept.`;
+    run=()=>{ stripKeys(year, streams(year).filter(s=>s.kind==='manual').map(s=>s.id)); };
+  }
+  else if(kind==='monthbills'){
+    const d = peekMonth(year,month) || {};
+    const n = EXPENSE_KEYS.filter(k=>d[k]!=null).length;
+    label=`${MOF[month-1]} bills`;
+    msg=`Clear ${n} bill ${n===1?'entry':'entries'} in ${MOF[month-1]} ${year}?\n\nIncome typed into this month is kept.`;
+    run=()=>{ stripKeys(year, EXPENSE_KEYS, month); };
+  }
+  else if(kind==='yearbills'){
+    const n = countBillEntries(year);
+    label=`${year} bills`;
+    msg=`Clear every bill entry in ${year}?\n\n${n} ${n===1?'entry':'entries'} across all twelve months.\nIncome is kept. Other years are untouched.`;
+    run=()=>{ stripKeys(year, EXPENSE_KEYS); };
+  }
+  else if(kind==='pots'){
+    label='pots';
+    msg='Reset the pots to Wishlist 30 / Home upgrades 40 / Bike 30, with no targets?';
+    run=()=>{ state.settings.pots = DEFAULTS().settings.pots; };
+  }
+  else if(kind==='cycles'){
+    label='billing cycles';
+    msg='Reset every utility billing cycle to February?';
+    run=()=>{ state.settings.anchors = DEFAULTS().settings.anchors; };
+  }
+  else if(kind==='tax'){
+    label='tax threshold';
+    msg='Reset the tax threshold to ₹12,50,000?';
+    run=()=>{ state.settings.tax = DEFAULTS().settings.tax; };
+  }
+  else if(kind==='year'){
+    const n = Y ? Object.keys(Y.months||{}).length : 0;
+    label=`the whole of ${year}`;
+    msg=`Delete everything in ${year}?\n\n${n} month${n===1?'':'s'} of records, plus that year's income sources.\nOther years are untouched. Export first if you are unsure.`;
+    run=()=>{ delete state.years[year]; };
+  }
+  else if(kind==='all'){
+    const n = Object.keys(state.years).length;
+    label='the whole ledger';
+    msg=`Delete the ENTIRE ledger?\n\n${n} year${n===1?'':'s'} of records, every setting, every pot.\n\nThere is one level of undo, but export first.`;
+    run=()=>{ state = DEFAULTS(); };
+  }
+  else return;
+
+  if(!await confirmModal('Reset '+label, msg, 'Reset')) return;
+  snapshot(label);
+  logEvent('data','reset: '+label);
+  run();
+  save(); renderAll();
+  toast('Reset ' + label + ' — undo is at the bottom of Reset');
+}
+
+function renderPatterns(){
+  const p = patternReport(year, mode());
+  $('#patPeek').textContent = p.ready ? `${p.months} months read` : `${p.months} of 3 months needed`;
+  if(!p.ready){
+    $('#patBody').innerHTML = `<p class="hint">Patterns need at least three filled months before they mean anything. You have ${p.months}. Until then this panel stays quiet rather than guessing at a trend — a shape drawn from one or two months is noise wearing a suit.</p>`;
+    return;
+  }
+  $('#patBody').innerHTML = p.items.map(it=>`
+    <div class="row"><span class="lbl">${esc(it.title)}<span class="sub">${esc(it.note)}</span></span>
+      <span class="derived ink">${esc(it.value)}</span></div>`).join('') +
+    `<p class="hint">Read in the ${mode()==='cash'?'cash-flow':'levelled'} view. These are observations, not instructions — they describe what you have done, and leave what to do about it to you.</p>`;
+}
+
+/* The statement: a self-contained page anyone can be handed. Print to PDF. */
+function buildStatement(){
+  const m = state.meta || PROVENANCE;
+  const t = taxSummary(year), p = patternReport(year, mode()), yt = yearTotals(year, mode());
+  const ss = streams(year), pots = state.settings.pots;
+  const stamp = new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  const kv = (k,v)=>`<div class="kv"><span>${esc(k)}</span><span class="n">${v}</span></div>`;
+
+  const h = holder();
+  const holderBlock = (h.name||h.advisor||h.pan||h.note) ? `
+    <h2>Holder</h2>
+    ${h.name?kv('Name', esc(h.name)):''}
+    ${h.pan?kv('PAN', esc(h.pan)):''}
+    ${h.city?kv('City / state', esc(h.city)):''}
+    ${h.email?kv('Email', esc(h.email)):''}
+    ${h.phone?kv('Phone', esc(h.phone)):''}
+    ${h.advisor?kv('Funds manager / CA', esc(h.advisor)):''}
+    ${h.note?`<p class="note">${esc(h.note)}</p>`:''}` : '';
+
+  const instRows = ss.filter(s=>s.issuer||s.isin||s.demat||s.redeemOn||(s.depository&&s.depository!=='—')).map(s=>
+    `<tr><td>${esc(s.name)}</td><td style="text-align:left">${esc(s.issuer||'—')}</td>
+     <td style="text-align:left">${esc(s.depository&&s.depository!=='—'?s.depository:'—')}</td>
+     <td style="text-align:left">${esc(s.isin||s.demat||'—')}</td>
+     <td style="text-align:left">${esc(s.creditTo||'—')}</td>
+     <td>${s.redeemOn?esc(s.redeemOn):'—'}</td><td>${s.redeemAmount?money(s.redeemAmount):'—'}</td></tr>`).join('');
+  const instBlock = instRows ? `
+    <h2>Instruments</h2>
+    <table><thead><tr><th style="text-align:left">Source</th><th style="text-align:left">Issuer</th><th style="text-align:left">Held in</th>
+    <th style="text-align:left">ISIN / account</th><th style="text-align:left">Credited to</th><th>Redeems</th><th>At redemption</th></tr></thead>
+    <tbody>${instRows}</tbody></table>
+    <p class="note">Securities in dematerialised form are held with NSDL or CDSL, the two depositories recognised by SEBI, through a depository participant. Redemption amounts are return of capital and are excluded from the income figures above.</p>` : '';
+
+  const srcRows = ss.map(s=>{
+    const net = streamNet(year,s);
+    const basis = s.kind==='contract' ? `${s.kanals||0} kanals at ${money((Number(s.ratePerAcre)||0)/KANALS_PER_ACRE)} per kanal`
+      : s.kind==='deposit' ? `${money(s.principal)} at ${s.rate||0}%${Number(s.tds)?`, TDS ${s.tds}%`:', no TDS'}`
+      : s.kind==='fixed' ? 'fixed annual amount' : 'entered by hand each month';
+    const sched = s.kind==='manual' ? 'monthly' : `${FREQ_LABEL[s.freq||'halfyearly']} — ${payoutMonths(s.freq,s.anchor).map(x=>MO[x-1]).join(', ')}`;
+    const annual = s.kind==='manual' ? manualAnnual(year,s) : net;
+    return `<tr><td>${esc(s.name)}</td><td style="text-align:left">${esc(basis)}</td><td style="text-align:left">${esc(sched)}</td>
+      <td>${s.taxable?'Taxable':'Exempt'}</td><td>${money(annual)}</td></tr>`;
+  }).join('');
+
+  let reg = '';
+  for(let mm=1;mm<=12;mm++){
+    const i=inflow(year,mm,mode()), o=outflow(year,mm,mode()), s=surplus(year,mm,mode());
+    const live=(i.any||o.any);
+    reg += `<tr><td>${MOF[mm-1]}</td><td>${live?money(i.total):'—'}</td><td>${o.any?money(o.total):'—'}</td>
+      <td>${s==null?'—':money(s)}</td><td>${live?money(carryTo(year,mm,mode())):'—'}</td></tr>`;
+  }
+
+  $('#print').innerHTML = `
+    <h1>Sustain statement — ${year}</h1>
+    <div class="meta">${h.name?esc(h.name)+' · ':''}Prepared ${stamp} · ${mode()==='cash'?'Cash-flow view: every figure sits in the month the money moved':'Levelled view: lumps spread across the months they cover'}</div>
+    ${holderBlock}
+
+    <h2>Position</h2>
+    ${kv('Income recorded', money(yt.inc))}
+    ${kv('Household outflow', money(yt.out))}
+    ${kv('Retained', money(yt.net))}
+    ${kv('Months recorded', yt.months + ' of 12')}
+
+    <h2>Income sources</h2>
+    <table><thead><tr><th style="text-align:left">Source</th><th style="text-align:left">Basis</th><th style="text-align:left">Paid</th><th>Tax</th><th>A year</th></tr></thead>
+    <tbody>${srcRows}</tbody></table>
+
+    <h2>Twelve months</h2>
+    <table><thead><tr><th style="text-align:left">Month</th><th>In</th><th>Bills</th><th>Surplus</th><th>Carry</th></tr></thead>
+    <tbody>${reg}</tbody></table>
+
+    ${instBlock}
+
+    <div class="pbreak"></div>
+    <h2>Allocation</h2>
+    ${pots.map(x=>kv(`${x.name} — ${x.share}%${Number(x.target)?' of '+money(x.target):''}`, money(potYTD(year,x.id,mode())))).join('')}
+
+    <h2>Tax position</h2>
+    ${kv('Gross income', money(t.gross))}
+    ${kv('Exempt', money(t.exempt))}
+    ${kv('Taxable', money(t.taxable))}
+    ${kv('TDS deducted', money(t.tds))}
+    ${kv('Threshold applied', money(t.threshold))}
+    ${kv('Taxable income over threshold', money(t.over))}
+    <p class="note">Arithmetic only. This is not a liability calculation and accounts for no deductions, slabs, set-offs or capital gains. The threshold is self-set and must be confirmed with a chartered accountant.</p>
+
+    <h2>What the data shows</h2>
+    ${p.ready
+      ? p.items.map(it=>`<div class="kv"><span>${esc(it.title)} — <span style="color:#666">${esc(it.note)}</span></span><span class="n">${esc(it.value)}</span></div>`).join('')
+      : `<p class="note">Only ${p.months} month${p.months===1?'':'s'} recorded. Patterns are withheld until at least three months are in, rather than drawn from too little.</p>`}
+
+    <h2>Provenance</h2>
+    <p class="note">${m.tool} ${m.version} · ${m.builtWith} · ${m.lineage}<br>
+    ${m.chatUrl?'Built in: '+m.chatUrl+'<br>':''}${m.repoUrl?'Source: '+m.repoUrl+'<br>':''}
+    ${(m.siblings||[]).map(x=>x.name+': '+x.url).join('<br>')}<br>
+    Figures are self-reported and held in a single browser. This statement is a snapshot, not an audited account.</p>`;
+}
+function printStatement(){
+  buildStatement();
+  setTimeout(()=>window.print(), 60);
+}
+
+/* ── Spreadsheet exports ──────────────────────────────────
+   Raw numbers only. No currency symbols, no separators, no blanks
+   where a zero is meant. An accountant should be able to pivot this
+   without cleaning it first. */
+function registerRows(){
+  const ss = streams(year), pots = state.settings.pots, view = mode();
+  const head = ['Year','MonthNo','Month','View', ...ss.map(s=>'In_'+s.name),
+    'Income', ...EXPENSES.map(e=>'Out_'+e.label), 'Outflow','Surplus','Carry',
+    ...pots.map(p=>'Alloc_'+p.name), 'Recorded'];
+  const rows=[head];
+  for(let m=1;m<=12;m++){
+    const i=inflow(year,m,view), o=outflow(year,m,view), s=surplus(year,m,view), a=allocate(s);
+    const r=[year, m, MOF[m-1], view];
+    i.items.forEach(x=>r.push(Math.round(x.amount)));
+    r.push(Math.round(i.total));
+    EXPENSES.forEach(e=>{ const v=charge(year,m,e.key,view); r.push(v==null?0:Math.round(v)); });
+    r.push(Math.round(o.total), s==null?0:Math.round(s), Math.round(carryTo(year,m,view)));
+    pots.forEach(p=>{ const x=a.find(q=>q.id===p.id); r.push((s!=null&&s>0)?x.amount:0); });
+    r.push(hasMonth(year,m)?1:0);
+    rows.push(r);
+  }
+  return rows;
+}
+function exportRegisterCSV(){
+  const csv = registerRows().map(r=>r.map(csvCell).join(',')).join('\n');
+  download(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}), `sustain-register-${year}-${mode()}.csv`);
+}
+function exportRegisterXLS(){
+  const rows = registerRows();
+  const head = rows[0].map(h=>`<th>${esc(h)}</th>`).join('');
+  const body = rows.slice(1).map(r=>'<tr>'+r.map((c,ix)=>
+    `<td${ix>3?' style="mso-number-format:0"':''}>${esc(c)}</td>`).join('')+'</tr>').join('');
+  const doc = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
+    <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+    <x:Name>Register ${year}</x:Name><x:WorksheetOptions><x:FreezePanes/><x:SplitHorizontalPosition>1</x:SplitHorizontalPosition>
+    </x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    <style>table{border-collapse:collapse}th{background:#EEE;text-align:left;border:1px solid #999;padding:4px}
+    td{border:1px solid #CCC;padding:4px}</style></head>
+    <body><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+  download(new Blob([doc],{type:'application/vnd.ms-excel'}), `sustain-register-${year}-${mode()}.xls`);
+}
+
+/* ── The dressed page ─────────────────────────────────────
+   A self-contained HTML file: opens anywhere, prints itself, needs
+   nothing from this app or the network. */
+function statementPageHTML(){
+  buildStatement();
+  const body = $('#print').innerHTML;
+  const css = `
+    :root{--ink:#16202E;--muted:#66788C;--rule:#D4DCE4}
+    *{box-sizing:border-box}
+    body{margin:0;background:#E9EDF0;font:15px/1.55 'IBM Plex Sans',system-ui,-apple-system,sans-serif;color:var(--ink)}
+    .sheet{max-width:820px;margin:24px auto;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:34px 38px}
+    h1{font-family:Fraunces,Georgia,serif;font-size:26px;margin:0 0 2px;letter-spacing:-.01em}
+    h2{font-size:11px;text-transform:uppercase;letter-spacing:.14em;margin:26px 0 8px;color:var(--muted);border-bottom:1px solid var(--rule);padding-bottom:4px;font-weight:600}
+    .meta{font-size:12px;color:var(--muted);margin-bottom:6px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{padding:5px 7px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--rule)}
+    th{font-size:11px;font-weight:600;color:var(--muted)}
+    th:first-child,td:first-child{text-align:left}
+    .kv{display:flex;justify-content:space-between;gap:14px;padding:5px 0;border-bottom:1px solid #EFF2F5}
+    .kv .n{font-family:'IBM Plex Mono',ui-monospace,monospace}
+    .note{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:6px}
+    .bar{max-width:820px;margin:0 auto;padding:16px 38px 0;display:flex;gap:10px;justify-content:flex-end}
+    .bar button{font:inherit;font-size:13px;padding:8px 14px;border:1px solid #B9C5D1;background:#fff;border-radius:8px;cursor:pointer}
+    @media print{body{background:#fff}.bar{display:none}.sheet{margin:0;border:0;border-radius:0;padding:0;max-width:none}@page{margin:14mm}}
+    .pbreak{break-before:page;page-break-before:always}`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sustain statement ${year}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>${css}</style></head><body>
+<div class="bar"><button onclick="window.print()">Print / save as PDF</button></div>
+<div class="sheet">${body}</div></body></html>`;
+}
+function downloadStatementPage(){
+  download(new Blob([statementPageHTML()],{type:'text/html;charset=utf-8'}), `sustain-statement-${year}-${mode()}.html`);
+}
+
+/* ── Self-diagnostics ─────────────────────────────────────
+   Invariants the app asserts about itself at runtime, so a fault
+   arrives as a report rather than a screenshot. */
+const errorLog = [];
+function systemCheck(){
+  const c=[], ok=(n,d)=>c.push({s:'ok',n,d}), bad=(n,d)=>c.push({s:'FAIL',n,d}), warn=(n,d)=>c.push({s:'warn',n,d});
+  const near=(a,b)=>Math.abs(a-b)<0.01;
+
+  c.push({s:'info', n:'Schema', d:`v${state.ver} · store ${STORE_KEY}`});
+  let bytes=0; try{ bytes=(localStorage.getItem(STORE_KEY)||'').length; }catch(e){}
+  c.push({s:'info', n:'Storage', d:`${bytes} chars · ${Object.keys(state.years).length} year(s)`});
+  c.push({s:'info', n:'View', d:mode()});
+
+  const ids = streams(year).map(s=>s.id);
+  ids.length===new Set(ids).size ? ok('Stream ids unique', ids.join(', ')) : bad('Stream ids unique','duplicate id present');
+
+  let annual=0; streams(year).forEach(s=>{ annual += s.kind==='manual'?manualAnnual(year,s):(streamNet(year,s)||0); });
+  let sumS=0, sumC=0;
+  for(let m=1;m<=12;m++){ sumS+=inflow(year,m,'spread').total; sumC+=inflow(year,m,'cash').total; }
+  near(sumS,sumC) ? ok('Views agree on annual income', money(sumS)) : bad('Views agree on annual income', `spread ${sumS} vs cash ${sumC}`);
+  near(sumS,annual) ? ok('Income reconciles to sources', money(annual)) : bad('Income reconciles to sources', `months ${sumS} vs sources ${annual}`);
+
+  let potFail=0;
+  for(let m=1;m<=12;m++){
+    const s=surplus(year,m,mode()); if(s==null||s<=0) continue;
+    const t=allocate(s).reduce((a,p)=>a+p.amount,0);
+    if(t!==Math.round(s)) potFail++;
+  }
+  potFail ? bad('Pots sum to surplus', `${potFail} month(s) off by rounding`) : ok('Pots sum to surplus','all months exact');
+
+  const known = new Set([...EXPENSE_KEYS, ...streams(year).filter(s=>s.kind==='manual').map(s=>s.id)]);
+  const orphans=new Set(); let nonFinite=0, negatives=0;
+  Object.keys(state.years).forEach(y=>{
+    const Y=state.years[y];
+    Object.keys(Y.months||{}).forEach(m=>{
+      Object.entries(Y.months[m]).forEach(([k,v])=>{
+        if(String(y)===String(year) && !known.has(k)) orphans.add(k);
+        if(!Number.isFinite(Number(v))) nonFinite++;
+        else if(Number(v)<0) negatives++;
+      });
+    });
+  });
+  nonFinite ? bad('All stored values numeric', `${nonFinite} non-finite value(s)`) : ok('All stored values numeric','no NaN or null');
+  negatives ? warn('No negative entries', `${negatives} negative value(s)`) : ok('No negative entries','none');
+  orphans.size ? warn('No orphaned keys', `${[...orphans].join(', ')} — source removed but data kept`) : ok('No orphaned keys','none');
+
+  const yt=yearTotals(year,mode());
+  near(carryTo(year,12,mode()), yt.net) ? ok('Carry closes to year net', money(yt.net))
+    : bad('Carry closes to year net', `carry ${carryTo(year,12,mode())} vs net ${yt.net}`);
+
+  const sh=state.settings.pots.reduce((a,p)=>a+(Number(p.share)||0),0);
+  sh>0 ? ok('Pot shares usable', sh+'% total, normalised') : warn('Pot shares usable','all shares are zero — nothing will allocate');
+
+  streams(year).forEach(s=>{
+    if(s.kind==='manual') return;
+    if(streamNet(year,s)==null) warn('Source configured: '+s.name,'no amounts entered yet');
+    else if(streamEnded(s,year,12)) warn('Source configured: '+s.name,`ends ${s.end} — stops counting after that`);
+  });
+
+  errorLog.length ? bad('No runtime errors', errorLog.length+' captured') : ok('No runtime errors','none since load');
+  return c;
+}
+function diagnosticText(){
+  const c=systemCheck();
+  const notes=($('#devNotes')&&$('#devNotes').value.trim())||'';
+  return [
+    `SUSTAIN DIAGNOSTIC · ${new Date().toISOString()}`,
+    `${PROVENANCE.tool} ${PROVENANCE.version} · year ${year} · month ${MOF[month-1]} · view ${mode()}`,
+    `agent: ${navigator.userAgent}`,
+    `viewport: ${window.innerWidth}x${window.innerHeight}`,
+    '', '--- CHECKS ---',
+    ...c.map(x=>`[${x.s.toUpperCase().padEnd(4)}] ${x.n} — ${x.d}`),
+    '', '--- ERRORS ---',
+    errorLog.length ? errorLog.join('\n') : 'none',
+    '', '--- DEVELOPER NOTES ---',
+    notes || '(none added)',
+    '', '--- STATE SHAPE (no amounts) ---',
+    JSON.stringify({ver:state.ver, years:Object.keys(state.years),
+      streams:streams(year).map(s=>({id:s.id,kind:s.kind,freq:s.freq,anchor:s.anchor,taxable:s.taxable,configured:s.kind==='manual'||streamNet(year,s)!=null})),
+      pots:state.settings.pots.map(p=>({id:p.id,share:p.share,target:!!p.target})),
+      anchors:state.settings.anchors, mode:state.settings.mode}, null, 1)
+  ].join('\n');
+}
+function renderDiagnostics(){
+  const c=systemCheck();
+  const badN=c.filter(x=>x.s==='FAIL').length, warnN=c.filter(x=>x.s==='warn').length;
+  $('#diagPeek').textContent = badN ? `${badN} failing` : warnN ? `${warnN} to look at` : 'all clear';
+  const dot=s=>s==='FAIL'?'var(--spend)':s==='warn'?'var(--brass)':s==='info'?'var(--muted)':'var(--grow)';
+  $('#diagBody').innerHTML =
+    c.map(x=>`<div class="row"><span class="lbl">${esc(x.n)}<span class="sub">${esc(x.d)}</span></span>
+      <span class="derived" style="color:${dot(x.s)};font-size:11px">${x.s.toUpperCase()}</span></div>`).join('') +
+    `<p class="eyebrow" style="margin:16px 0 4px">Add what you saw</p>
+     <textarea id="devNotes" rows="3" placeholder="What did you do, what did you expect, what happened instead?"
+       style="width:100%;font:inherit;font-size:13px;padding:9px;border:1px solid var(--rule-strong);border-radius:8px;background:var(--sunk);color:var(--ink);resize:vertical"></textarea>
+     <div class="btns"><button class="btn" id="copyDiag">Copy report</button><button class="btn" id="dlDiag">Download report</button></div>
+     <p class="hint">The report carries the shape of your data — stream kinds, schedules, pot shares — but no amounts. Paste it into a bug report as-is.</p>`;
+}
+
+/* ── Modal + toast: the app speaks for itself, no browser chrome ──── */
+function openModal(title, bodyHTML, actions){
+  $('#modalTitle').textContent = title;
+  $('#modalBody').innerHTML = bodyHTML;
+  $('#modalFoot').innerHTML = actions.map((a,i)=>
+    `<button class="btn ${a.primary?'primary':''}" data-act="${i}">${esc(a.label)}</button>`).join('');
+  $('#modalFoot').onclick = e=>{
+    const b=e.target.closest('[data-act]'); if(!b) return;
+    const a=actions[Number(b.dataset.act)];
+    closeModal(); if(a.run) a.run();
+  };
+  $('#modalBack').classList.add('on');
+  logEvent('ui','modal opened: '+title);
+}
+function closeModal(){ $('#modalBack').classList.remove('on'); $('#modalBody').innerHTML=''; }
+function confirmModal(title, msg, confirmLabel){
+  return new Promise(res=>{
+    openModal(title, `<p style="font-size:13.5px;white-space:pre-line;margin:10px 0">${esc(msg)}</p>`, [
+      {label:'Cancel', run:()=>res(false)},
+      {label:confirmLabel||'Confirm', primary:true, run:()=>res(true)}
+    ]);
+    $('#modalX').onclick = ()=>{ closeModal(); res(false); };
+  });
+}
+
+/* ── In-app console ───────────────────────────────────────────────
+   The app is large enough that a developer needs to see what it did,
+   not guess. Ring buffer, capped, never leaves the browser. */
+const LOG = [];
+let conFilter = 'all';
+function logEvent(level, msg){
+  LOG.push({t:new Date().toISOString().slice(11,23), level, msg:String(msg)});
+  if(LOG.length>400) LOG.shift();
+  if(level==='error') errorLog.push(msg);
+  const el=document.getElementById('conBody'); if(el && el.innerHTML) renderConsole();
+}
+function renderConsole(){
+  const rows = LOG.filter(l=>conFilter==='all'||l.level===conFilter).slice(-120).reverse();
+  const colour = l => l==='error'?'var(--spend)':l==='warn'?'var(--brass)':l==='data'?'var(--grow)':'var(--muted)';
+  $('#conPeek').textContent = `${LOG.length} entries · ${LOG.filter(l=>l.level==='error').length} errors`;
+  $('#conBody').innerHTML =
+    `<div class="btns" style="margin:6px 0 8px">
+      ${['all','data','ui','warn','error'].map(f=>`<button class="btn" data-filter="${f}" style="${conFilter===f?'background:var(--ink);color:#fff;border-color:var(--ink)':''}">${f}</button>`).join('')}
+      <button class="btn" id="conCopy">Copy</button><button class="btn" id="conClear">Clear</button>
+    </div>
+    <div style="max-height:280px;overflow:auto;border:1px solid var(--rule);border-radius:8px;background:var(--sunk);padding:8px">
+    ${rows.length? rows.map(l=>`<div style="font-family:var(--mono);font-size:11px;line-height:1.6;color:${colour(l.level)};white-space:pre-wrap;word-break:break-word">${esc(l.t)} [${esc(l.level)}] ${esc(l.msg)}</div>`).join('')
+      : '<div class="hint" style="margin:0">Nothing logged yet.</div>'}
+    </div>
+    <p class="hint">Newest first, last 120 shown of ${LOG.length} held. Copy pastes straight into a bug report alongside the system check.</p>`;
+}
+
+/* ── Holder details ───────────────────────────────────────────────
+   Who the statement is about. Appears on the exported statement. */
+const HOLDER_FIELDS = [
+  {k:'name',    label:'Name',              ph:'as it should appear on the statement'},
+  {k:'pan',     label:'PAN',               ph:'optional'},
+  {k:'email',   label:'Email',             ph:'optional'},
+  {k:'phone',   label:'Phone',             ph:'optional'},
+  {k:'city',    label:'City / state',      ph:'optional'},
+  {k:'advisor', label:'Funds manager / CA',ph:'who else reads this'},
+  {k:'note',    label:'Statement note',    ph:'e.g. prepared for annual review'}
+];
+function holder(){ return state.settings.holder || (state.settings.holder = {}); }
+function openHolderModal(){
+  const h = holder();
+  const body = HOLDER_FIELDS.map(f=>`
+    <div class="row"><span class="lbl">${f.label}<span class="sub">${f.ph}</span></span>
+      <input type="text" data-holder="${f.k}" value="${esc(h[f.k]||'')}" placeholder="—"
+        style="width:190px;flex:0 0 auto;font:inherit;padding:6px 9px;border:1px solid var(--rule-strong);border-radius:7px;background:var(--sunk);color:var(--ink)"></div>`).join('') +
+    `<p class="hint">Stored in this browser only, and written into the exported statement and PDF. Leave PAN blank if you would rather it never sat in local storage — the statement reads fine without it.</p>`;
+  openModal('Statement holder', body, [{label:'Done', primary:true, run:()=>{ save(); renderAll(); toast('Holder details saved'); }}]);
+  $('#modalX').onclick = ()=>{ save(); renderAll(); closeModal(); };
+  $('#modalBody').addEventListener('input', e=>{
+    const k = e.target.dataset && e.target.dataset.holder;
+    if(k){ holder()[k] = e.target.value; logEvent('data','holder.'+k+' edited'); }
+  });
+}
+
+/* ── Instrument details on a stream ───────────────────────────── */
+const DEPOSITORIES = ['—','NSDL','CDSL','Not in demat'];
+function instrumentBlock(s){
+  const f=(k,label,sub,type)=>`<div class="row"><span class="lbl">${label}<span class="sub">${sub}</span></span>
+    <input type="${type||'text'}" data-scope="stream" data-id="${s.id}" data-key="${k}" value="${esc(s[k]||'')}" placeholder="—"
+      style="width:170px;flex:0 0 auto;font:inherit;text-align:right;padding:6px 9px;border:1px solid var(--rule-strong);border-radius:7px;background:var(--sunk);color:var(--ink)"></div>`;
+  return `<details class="inner"><summary>Instrument details</summary><div class="dbody">
+    ${f('issuer','Issuer / institution','bank, company or counterparty')}
+    <div class="row"><span class="lbl">Held in<span class="sub">SEBI recognises two depositories</span></span>
+      <select data-scope="stream" data-id="${s.id}" data-key="depository" aria-label="Depository">
+        ${DEPOSITORIES.map(x=>`<option value="${x}" ${(s.depository||'—')===x?'selected':''}>${x}</option>`).join('')}
+      </select></div>
+    ${f('demat','Demat / account ref','BO ID, folio or account number')}
+    ${f('isin','ISIN','the security identifier, if any')}
+    ${f('creditTo','Credited to','which bank account receives it')}
+    ${f('redeemOn','Matures / redeems on','date the principal returns','date')}
+    ${f('redeemAmount','Amount at redemption','principal returned on that date','number')}
+    <p class="hint">Recorded for the statement only — redemption is not counted as income, since it is your own capital coming back.</p>
+  </div></details>`;
+}
+
+function renderReset(){
+  const bills = countBillEntries(year), typed = countTypedIncome(year);
+  const yMonths = peekYear(year) ? Object.keys(peekYear(year).months||{}).length : 0;
+  const btn = (k,t) => `<button class="btn warn" data-reset="${k}">${t}</button>`;
+  $('#resetBody').innerHTML = `
+    <p class="hint">Each reset is scoped and counted before it runs, and the last one can be undone. Nothing here touches another year unless it says so.</p>
+
+    <p class="eyebrow" style="margin:12px 0 4px">Income</p>
+    <div class="row"><span class="lbl">Income sources<span class="sub">back to the four defaults, ${year} only — typed amounts kept</span></span>${btn('income','Reset')}</div>
+    <div class="row"><span class="lbl">Typed income<span class="sub">${typed} ${typed===1?'entry':'entries'} across ${year}</span></span>${btn('typed','Clear')}</div>
+
+    <p class="eyebrow" style="margin:16px 0 4px">Bills</p>
+    <div class="row"><span class="lbl">${MOF[month-1]} only<span class="sub">this month's bills, income untouched</span></span>${btn('monthbills','Clear')}</div>
+    <div class="row"><span class="lbl">Every bill in ${year}<span class="sub">${bills} ${bills===1?'entry':'entries'} across twelve months</span></span>${btn('yearbills','Clear')}</div>
+
+    <p class="eyebrow" style="margin:16px 0 4px">Settings</p>
+    <div class="row"><span class="lbl">Pots<span class="sub">shares and targets back to defaults</span></span>${btn('pots','Reset')}</div>
+    <div class="row"><span class="lbl">Billing cycles<span class="sub">utility anchor months back to February</span></span>${btn('cycles','Reset')}</div>
+    <div class="row"><span class="lbl">Tax threshold<span class="sub">back to ₹12,50,000</span></span>${btn('tax','Reset')}</div>
+
+    <p class="eyebrow" style="margin:16px 0 4px">Whole years</p>
+    <div class="row"><span class="lbl">Delete ${year}<span class="sub">${yMonths} month${yMonths===1?'':'s'} of records — other years kept</span></span>${btn('year','Delete')}</div>
+    <div class="row"><span class="lbl">Delete everything<span class="sub">${Object.keys(state.years).length} year(s), all settings — export first</span></span>${btn('all','Delete all')}</div>
+
+    <div class="row tot"><span class="lbl" style="font-weight:600">Undo last reset<span class="sub">${undoSnap?'available — '+esc(undoSnap.label)+'. Lost when you close the page.':'nothing to undo'}</span></span>
+      <button class="btn" id="undoBtn" ${undoSnap?'':'disabled style="opacity:.45;cursor:not-allowed"'}>Undo</button></div>`;
+}
+
+function copyPrev(){
+  const p = month===1 ? {y:year-1,m:12} : {y:year,m:month-1};
+  const src = peekMonth(p.y,p.m);
+  if(!src){ toast(`Nothing recorded in ${MOF[p.m-1]} ${p.y}`); return; }
+  const dst = ensureMonth(year,month); let n=0;
+  Object.keys(src).forEach(k=>{
+    const c = catOf(k);
+    if(c && c.cycle==='bimonthly') return;
+    dst[k] = src[k]; n++;
+  });
+  save(); renderAll();
+  toast(`Copied ${n} recurring ${n===1?'entry':'entries'} from ${MO[p.m-1]}. Utility bills skipped.`);
+}
+let clearArmed=false, clearTimer=null;
+function clearMonth(){
+  const b=$('#clearMonth');
+  if(!clearArmed){
+    clearArmed=true; b.textContent='Tap again to clear';
+    clearTimer=setTimeout(()=>{clearArmed=false;b.textContent='Clear this month';},3200);
+    return;
+  }
+  clearTimeout(clearTimer); clearArmed=false; b.textContent='Clear this month';
+  const Y=peekYear(year); if(Y && Y.months[month]) delete Y.months[month];
+  prune(year,month); save(); renderAll(); toast(`${MOF[month-1]} cleared`);
+}
+function download(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+  toast('Saved '+name);
+}
+function exportJSON(){
+  const payload={...state, meta:{...state.meta, exportedAt:new Date().toISOString()}};
+  download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}), `sustain-${new Date().toISOString().slice(0,10)}.json`);
+}
+function csvCell(v){ const s=String(v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function exportCSV(){
+  const ss = streams(year), pots = state.settings.pots;
+  const head = ['Month', ...ss.map(s=>s.name), 'TotalIn', ...EXPENSES.map(e=>e.label), 'TotalOut','Surplus','Carry', ...pots.map(p=>p.name)];
+  const rows = [head.map(csvCell).join(',')];
+  for(let m=1;m<=12;m++){
+    const i=inflow(year,m,mode()), o=outflow(year,m,mode()), s=surplus(year,m,mode()), a=allocate(s);
+    const r=[MOF[m-1]];
+    i.items.forEach(x=>r.push(x.amount?Math.round(x.amount):''));
+    r.push(i.any?Math.round(i.total):'');
+    EXPENSES.forEach(e=>{ const v=charge(year,m,e.key,mode()); r.push(v==null?'':Math.round(v)); });
+    r.push(o.any?Math.round(o.total):'', s==null?'':Math.round(s), (i.any||o.any)?Math.round(carryTo(year,m,mode())):'');
+    pots.forEach(p=>{ const x=a.find(q=>q.id===p.id); r.push((s!=null&&s>0)?x.amount:''); });
+    rows.push(r.map(csvCell).join(','));
+  }
+  download(new Blob([rows.join('\n')],{type:'text/csv'}), `sustain-${year}-${mode()}.csv`);
+}
+function importJSON(file){
+  const fr=new FileReader();
+  fr.onload=()=>{
+    let p; try{ p=JSON.parse(fr.result); }catch(e){ toast('That file is not valid JSON'); return; }
+    if(!p || typeof p!=='object' || !p.years){ toast('That file is not a Sustain ledger'); return; }
+    const n=Object.keys(p.years).length;
+    confirmModal('Import ledger', `Replace the current ledger with this file?\n\n${n} year(s) of records\nExported: ${(p.meta&&p.meta.exportedAt)||'unknown'}\n\nThis cannot be undone.`, 'Replace').then(okay=>{
+      if(!okay) return;
+      snapshot('the ledger before import');
+      state=migrate(p); compact(); save(); renderAll(); toast(`Imported ${n} year(s)`);
+      logEvent('data','imported '+n+' year(s)');
+    });
+  };
+  fr.onerror=()=>toast('Could not read that file');
+  fr.readAsText(file);
+}
+
+function bind(){
+  $('#yPrev').onclick=()=>{ year--; renderAll(); };
+  $('#yNext').onclick=()=>{ year++; renderAll(); };
+  $('#months').addEventListener('click',e=>{
+    const b=e.target.closest('.mpill'); if(!b) return;
+    month=Number(b.dataset.m); renderAll(); window.scrollTo({top:0,behavior:'smooth'});
+  });
+  $('#modeCtl').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    state.settings.mode=b.dataset.mode; save(); renderAll();
+  });
+  $('#addStream').onclick=()=>addStream($('#addKind').value);
+  $('#gearBtn').onclick=openHolderModal;
+  $('#modalX').onclick=closeModal;
+  $('#modalBack').addEventListener('click',e=>{ if(e.target.id==='modalBack') closeModal(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && $('#modalBack').classList.contains('on')) closeModal(); });
+  $('#conBody').addEventListener('click',e=>{
+    const f=e.target.closest('[data-filter]'); if(f){ conFilter=f.dataset.filter; renderConsole(); return; }
+    if(e.target.closest('#conCopy')){
+      const t=LOG.map(l=>`${l.t} [${l.level}] ${l.msg}`).join('\n');
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(()=>toast('Console copied'),()=>toast('Could not copy'));
+      else toast('Clipboard unavailable');
+    }
+    if(e.target.closest('#conClear')){ toast('Console cleared'); LOG.length=0; renderConsole(); }
+  });
+  $('#resetBody').addEventListener('click',e=>{
+    const u=e.target.closest('#undoBtn'); if(u){ undoReset(); return; }
+    const b=e.target.closest('[data-reset]'); if(b) doReset(b.dataset.reset);
+  });
+  $('#streamRows').addEventListener('click',e=>{
+    const b=e.target.closest('[data-remove]'); if(!b) return;
+    removeStream(b.dataset.remove);
+  });
+
+  const numOrNull = v => { if(v==='') return null; const n=Number(v); return Number.isFinite(n)?Math.max(0,n):null; };
+
+  document.addEventListener('input',e=>{
+    const el=e.target, scope=el.dataset && el.dataset.scope;
+    if(!scope) return;
+    if(scope==='month'){ write(year,month,el.dataset.key,el.value); logEvent('data',`${MO[month-1]} ${el.dataset.key} = ${el.value||'(cleared)'}`); renderMonths(); renderLive(); }
+    else if(scope==='stream'){
+      const Y=ensureYear(year), s=Y.streams.find(x=>x.id===el.dataset.id); if(!s) return;
+      const k=el.dataset.key;
+      /* Numeric keys are the exception, not the rule. Everything else — issuer,
+         ISIN, depository, dates — is text and must survive as text. */
+      const NUMERIC = ['ratePerAcre','kanals','principal','rate','tds','annual','redeemAmount'];
+      if(k==='taxable') s.taxable = (el.value==='yes');
+      else if(k==='anchor') s.anchor = Number(el.value);
+      else if(NUMERIC.includes(k)) s[k] = numOrNull(el.value);
+      else s[k] = el.value;
+      save(); logEvent('data',`${s.name}.${k} = ${el.value||'(cleared)'}`); renderMonths(); renderLive();
+    }
+    else if(scope==='tax'){ state.settings.tax.threshold = numOrNull(el.value)||0; save(); renderTax(); }
+    else if(scope==='pot'){
+      const p=state.settings.pots.find(x=>x.id===el.dataset.id); if(!p) return;
+      p[el.dataset.key] = el.dataset.key==='name' ? el.value : Math.max(0,Number(el.value)||0);
+      save(); renderLive();
+    }
+  });
+  document.addEventListener('change',e=>{
+    const el=e.target, scope=el.dataset && el.dataset.scope;
+    if(scope==='anchor'){ state.settings.anchors[el.dataset.key]=Number(el.value); save(); renderAll(); }
+    else if(scope==='stream' && el.tagName==='SELECT'){ renderStreams(); refreshDerived(); }
+  });
+
+  $('#copyPrev').onclick=copyPrev;
+  $('#clearMonth').onclick=clearMonth;
+  $('#expJSON').onclick=exportJSON;
+  $('#expCSV').onclick=exportCSV;
+  $('#printStmt').onclick=printStatement;
+  $('#dlStmt').onclick=downloadStatementPage;
+  $('#regCSV').onclick=exportRegisterCSV;
+  $('#regXLS').onclick=exportRegisterXLS;
+  $('#diagBody').addEventListener('click',e=>{
+    if(e.target.closest('#copyDiag')){
+      const t=diagnosticText();
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(()=>toast('Report copied'),()=>toast('Could not copy — use Download'));
+      else toast('Clipboard unavailable — use Download');
+    }
+    if(e.target.closest('#dlDiag'))
+      download(new Blob([diagnosticText()],{type:'text/plain;charset=utf-8'}), `sustain-diagnostic-${new Date().toISOString().slice(0,10)}.txt`);
+  });
+  window.addEventListener('error',ev=>{ logEvent('error',`${ev.message} @ ${ev.filename||'inline'}:${ev.lineno||'?'}`); });
+  window.addEventListener('unhandledrejection',ev=>{ logEvent('error','unhandled promise: '+ev.reason); });
+  const ce=console.error, cw=console.warn;
+  console.error=function(){ logEvent('error',[...arguments].join(' ')); ce.apply(console,arguments); };
+  console.warn =function(){ logEvent('warn', [...arguments].join(' ')); cw.apply(console,arguments); };
+  logEvent('ui','app ready · '+PROVENANCE.tool+' '+PROVENANCE.version);
+  $('#impJSON').onclick=()=>$('#fileIn').click();
+  $('#fileIn').onchange=e=>{ const f=e.target.files[0]; if(f) importJSON(f); e.target.value=''; };
+
+  document.addEventListener('keydown',e=>{
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if(e.key==='ArrowLeft'){ month=month>1?month-1:12; renderAll(); }
+    if(e.key==='ArrowRight'){ month=month<12?month+1:1; renderAll(); }
+  });
+}
+
+(function init(){
+  const now=new Date();
+  year=now.getFullYear(); month=now.getMonth()+1;
+  load();
+  state.meta=Object.assign({}, PROVENANCE, state.meta||{}, {version:PROVENANCE.version, siblings:PROVENANCE.siblings});
+  renderAll(); bind();
+})();
+</script>
+</body>
+</html>
