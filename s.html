@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Spend Ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream:       #F5F0E8;
+      --cream-dark:  #EDE6D6;
+      --ink:         #1A1A1A;
+      --ink-light:   #4A4A4A;
+      --ink-muted:   #8A8A8A;
+      --forest:      #1C4532;
+      --forest-mid:  #276146;
+      --forest-light:#3A8C62;
+      --terra:       #C85B3A;
+      --terra-light: #E8745A;
+      --gold:        #C9922A;
+      --white:       #FFFFFF;
+      --shadow-sm:   0 1px 4px rgba(0,0,0,0.08);
+      --shadow-md:   0 4px 16px rgba(0,0,0,0.10);
+      --shadow-lg:   0 8px 32px rgba(0,0,0,0.12);
+      --radius:      10px;
+      --radius-lg:   16px;
+    }
+
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Lato', sans-serif;
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ─── BACKGROUND TEXTURE ─────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(28,69,50,0.04) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(200,91,58,0.04) 0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ─── HEADER ─────────────────────────────────── */
+    header {
+      background: var(--forest);
+      color: var(--white);
+      padding: 28px 24px 24px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 4px 24px rgba(28,69,50,0.25);
+    }
+    .header-inner {
+      max-width: 640px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .brand h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem; font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+    }
+    .brand p {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; font-weight: 300;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .currency-wrap {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .currency-wrap label {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.55);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #currency {
+      background: rgba(255,255,255,0.12);
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.2s;
+    }
+    #currency option { background: var(--forest); }
+    #currency:hover { background: rgba(255,255,255,0.2); }
+
+    /* ─── METRICS STRIP ──────────────────────────── */
+    .metrics-strip {
+      background: var(--forest-mid);
+      padding: 12px 24px 14px;
+    }
+    .metrics-inner {
+      max-width: 640px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 0; text-align: center;
+    }
+    .metrics-row-divider {
+      grid-column: 1 / -1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 6px 0;
+    }
+    .metric-card {
+      padding: 8px 4px;
+      position: relative;
+    }
+    .metric-card + .metric-card::before {
+      content: '';
+      position: absolute; left: 0; top: 20%; bottom: 20%;
+      width: 1px;
+      background: rgba(255,255,255,0.1);
+    }
+    .metric-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 3px;
+    }
+    .metric-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--white);
+      letter-spacing: -0.01em;
+    }
+    .metric-card.accent  .metric-value { color: #7ED4A4; }
+    .metric-card.terra   .metric-value { color: #F5A082; }
+    .metric-card.gold    .metric-value { color: #F5C97A; }
+    .metric-card.muted   .metric-value { color: rgba(255,255,255,0.7); }
+    .metric-card.bright  .metric-value { color: #A8D8FF; }
+
+    /* ─── MAIN CONTENT ───────────────────────────── */
+    main {
+      max-width: 640px; margin: 0 auto;
+      padding: 24px 20px 0;
+      position: relative; z-index: 1;
+    }
+
+    /* ─── FORM CARD ──────────────────────────────── */
+    .form-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      padding: 24px;
+      margin-bottom: 28px;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .form-card h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      color: var(--forest);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .form-card h2 i { font-size: 0.85rem; opacity: 0.6; }
+
+    .form-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 12px;
+    }
+    .form-full { margin-bottom: 12px; }
+
+    .field-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .field-wrap label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .field-wrap input,
+    .field-wrap select {
+      padding: 9px 12px;
+      border: 1.5px solid var(--cream-dark);
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--ink);
+      background: var(--cream);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    .field-wrap input:focus,
+    .field-wrap select:focus {
+      border-color: var(--forest-light);
+      box-shadow: 0 0 0 3px rgba(58,140,98,0.12);
+      background: var(--white);
+    }
+    .field-wrap input[type="number"] { font-size: 0.9rem; }
+    #amount { font-size: 1.05rem; letter-spacing: 0.02em; }
+
+    .payment-group {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 16px;
+    }
+    .pay-btn {
+      padding: 9px 12px;
+      border: 1.5px solid var(--cream-dark);
+      border-radius: 8px;
+      background: var(--cream);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center;
+      justify-content: center; gap: 6px;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .pay-btn:hover { border-color: var(--forest-light); color: var(--forest); }
+    .pay-btn.active {
+      background: var(--forest);
+      border-color: var(--forest);
+      color: var(--white);
+      box-shadow: 0 2px 8px rgba(28,69,50,0.2);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--forest);
+      color: var(--white);
+      border: none;
+      border-radius: 8px;
+      font-family: 'Lato', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    }
+    .submit-btn:hover {
+      background: var(--forest-light);
+      box-shadow: 0 4px 16px rgba(28,69,50,0.25);
+    }
+    .submit-btn:active { transform: scale(0.99); }
+
+    /* ─── ENTRIES SECTION ────────────────────────── */
+    .entries-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .entries-header h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+    .entry-count {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      background: var(--cream-dark);
+      color: var(--ink-muted);
+      padding: 3px 8px; border-radius: 20px;
+      letter-spacing: 0.06em;
+    }
+
+    /* ─── DATE GROUP ─────────────────────────────── */
+    .date-group { margin-bottom: 20px; }
+    .date-group-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.63rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: 8px;
+      padding: 0 2px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .date-group-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--cream-dark);
+    }
+    .date-group-total {
+      font-family: 'DM Mono', monospace;
+      color: var(--ink-light);
+      letter-spacing: 0.04em;
+      order: 3;
+    }
+
+    /* ─── ENTRY ITEM ─────────────────────────────── */
+    .entry-item {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 13px 16px;
+      margin-bottom: 8px;
+      display: flex; align-items: center;
+      gap: 12px;
+      border: 1px solid rgba(0,0,0,0.05);
+      transition: box-shadow 0.2s, transform 0.15s;
+      animation: slideIn 0.3s ease;
+      position: relative;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .entry-item:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+
+    .pay-badge {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      display: flex; align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+    .pay-badge.cash {
+      background: rgba(201,146,42,0.12);
+      color: var(--gold);
+    }
+    .pay-badge.upi {
+      background: rgba(28,69,50,0.1);
+      color: var(--forest);
+    }
+
+    .entry-body { flex: 1; min-width: 0; }
+    .entry-desc {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .entry-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .entry-amount {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.92rem;
+      font-weight: 500;
+      color: var(--terra);
+      flex-shrink: 0;
+    }
+
+    .delete-btn {
+      width: 28px; height: 28px;
+      border: none; background: none;
+      color: var(--ink-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex; align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      opacity: 0;
+    }
+    .entry-item:hover .delete-btn,
+    .delete-btn:focus-visible { opacity: 1; }
+    .delete-btn:hover {
+      background: #FEE2E2;
+      color: #DC2626;
+    }
+
+    /* ─── INLINE EDITING ─────────────────────────── */
+    .editable-field {
+      cursor: text;
+      border-radius: 4px;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      transition: background 0.15s, outline 0.15s;
+      display: inline-block;
+      min-width: 20px;
+    }
+    .editable-field:hover {
+      background: rgba(58,140,98,0.08);
+    }
+    .editable-field:focus {
+      outline: 1.5px solid var(--forest-light);
+      background: var(--white);
+      box-shadow: 0 0 0 3px rgba(58,140,98,0.12);
+    }
+    /* Special: amount field */
+    .editable-amount {
+      color: var(--terra);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.92rem;
+      font-weight: 500;
+      min-width: 48px;
+      text-align: right;
+    }
+    /* Special: time field */
+    .editable-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-muted);
+    }
+    /* Edit pencil hint */
+    .edit-hint {
+      font-size: 0.52rem;
+      color: var(--forest-light);
+      margin-left: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      vertical-align: middle;
+    }
+    .entry-item:hover .edit-hint { opacity: 0.6; }
+
+    /* ─── FILTER BAR ─────────────────────────────── */
+    .filter-bar {
+      display: flex; gap: 8px;
+      margin-bottom: 16px;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--cream-dark);
+      background: var(--white);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover { border-color: var(--forest-light); color: var(--forest); }
+    .filter-btn.active-all {
+      background: var(--forest);
+      border-color: var(--forest);
+      color: var(--white);
+    }
+    .filter-btn.active-cash {
+      background: rgba(201,146,42,0.12);
+      border-color: var(--gold);
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .filter-btn.active-upi {
+      background: rgba(28,69,50,0.1);
+      border-color: var(--forest);
+      color: var(--forest);
+      font-weight: 700;
+    }
+    .filter-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-all  { background: var(--white); border: 1.5px solid rgba(255,255,255,0.6); }
+    .dot-cash { background: var(--gold); }
+    .dot-upi  { background: var(--forest-light); }
+
+    /* ─── FILTER SUMMARY PANEL ───────────────────── */
+    .filter-summary {
+      display: none;
+      margin-top: 24px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      animation: slideIn 0.3s ease;
+    }
+    .filter-summary.visible { display: block; }
+
+    .fs-header {
+      padding: 14px 20px 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .fs-header.cash-theme { background: var(--gold); }
+    .fs-header.upi-theme  { background: var(--forest); }
+
+    .fs-icon {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; color: var(--white); flex-shrink: 0;
+    }
+    .fs-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--white);
+    }
+    .fs-subtitle {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      color: rgba(255,255,255,0.65);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .fs-body {
+      background: var(--white);
+      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    .fs-stat {
+      text-align: center;
+      padding: 8px 4px;
+    }
+    .fs-stat + .fs-stat {
+      border-left: 1px solid var(--cream-dark);
+    }
+    .fs-stat-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .fs-stat-value.highlight-cash { color: var(--gold); }
+    .fs-stat-value.highlight-upi  { color: var(--forest); }
+    .fs-stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-top: 3px;
+    }
+
+    /* ─── EMPTY STATE ────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .empty-icon {
+      font-size: 2.5rem;
+      color: var(--cream-dark);
+      margin-bottom: 16px;
+    }
+    .empty-state p {
+      font-family: 'Playfair Display', serif;
+      font-size: 1rem;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+    }
+    .empty-state span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--ink-muted);
+      opacity: 0.6;
+    }
+
+    /* ─── EXPORT / IMPORT TOOLBAR ────────────────── */
+    .data-toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      background: var(--white);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      align-items: center;
+    }
+    .toolbar-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+    .toolbar-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1.5px solid var(--cream-dark);
+      background: var(--cream);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      color: var(--ink-light);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover {
+      border-color: var(--forest-light);
+      color: var(--forest);
+      background: rgba(58,140,98,0.06);
+    }
+    .toolbar-btn.import-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(201,146,42,0.06);
+    }
+    .toolbar-btn.undo-btn {
+      border-color: var(--terra);
+      color: var(--terra);
+      background: rgba(200,91,58,0.06);
+    }
+    .toolbar-btn.undo-btn:hover {
+      border-color: var(--terra);
+      color: var(--white);
+      background: var(--terra);
+    }
+    .toolbar-btn[hidden] { display: none; }
+    .toolbar-divider {
+      width: 1px; height: 20px;
+      background: var(--cream-dark);
+      margin: 0 4px; flex-shrink: 0;
+    }
+    #importFileInput { display: none; }
+
+    /* ─── IMPORT REPORT ──────────────────────────── */
+    .import-report {
+      background: var(--white);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-left: 3px solid var(--forest-light);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      animation: slideIn 0.3s ease;
+    }
+    .import-report[hidden] { display: none; }
+    .import-report.warn { border-left-color: var(--terra); }
+    .ir-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.95rem;
+      color: var(--ink);
+      margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .ir-close {
+      border: none; background: none; cursor: pointer;
+      color: var(--ink-muted); font-size: 0.75rem;
+      padding: 4px; border-radius: 4px;
+    }
+    .ir-close:hover { color: var(--ink); background: var(--cream); }
+    .ir-line {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--ink-light);
+      line-height: 1.7;
+    }
+    .ir-line b { color: var(--forest); font-weight: 500; }
+    .ir-line.skip b { color: var(--gold); }
+    .ir-line.bad  b { color: var(--terra); }
+    .ir-detail {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--ink-muted);
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--cream-dark);
+      line-height: 1.6;
+      max-height: 96px;
+      overflow-y: auto;
+    }
+
+    /* ─── DROP ZONE STATE ────────────────────────── */
+    body.dropping::after {
+      content: 'Drop a JSON or CSV file to import';
+      position: fixed; inset: 12px;
+      border: 2px dashed var(--forest-light);
+      border-radius: var(--radius-lg);
+      background: rgba(245,240,232,0.92);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.06em;
+      color: var(--forest);
+      z-index: 900;
+      pointer-events: none;
+    }
+
+    /* ─── TOAST ──────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.04em;
+      color: var(--white);
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.success { background: var(--forest); }
+    #toast.error   { background: var(--terra); }
+
+    /* ─── ACCESSIBILITY ──────────────────────────── */
+    :focus-visible {
+      outline: 2px solid var(--forest-light);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* ─── RESPONSIVE ─────────────────────────────── */
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+      .metrics-inner { grid-template-columns: 1fr 1fr 1fr; }
+      .metric-value { font-size: 0.72rem; }
+      .metric-label { font-size: 0.5rem; }
+      .delete-btn { opacity: 1; }
+      .edit-hint { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── HEADER ───────────────────────────────────── -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <h1>Spend Ledger</h1>
+        <p>Daily Tracking</p>
+      </div>
+      <div class="currency-wrap">
+        <label for="currency">Currency</label>
+        <select id="currency">
+          <option value="INR">₹ INR</option>
+          <option value="USD">$ USD</option>
+          <option value="EUR">€ EUR</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── METRICS STRIP ───────────────────────────── -->
+  <div class="metrics-strip">
+    <div class="metrics-inner">
+
+      <!-- Row 1: today's cash, upi, transaction count -->
+      <div class="metric-card accent">
+        <div class="metric-label">Cash Today</div>
+        <div class="metric-value" id="metricCash">—</div>
+      </div>
+      <div class="metric-card terra">
+        <div class="metric-label">UPI Today</div>
+        <div class="metric-value" id="metricUpi">—</div>
+      </div>
+      <div class="metric-card bright">
+        <div class="metric-label">Txns Today</div>
+        <div class="metric-value" id="metricTxnCount">—</div>
+      </div>
+
+      <div class="metrics-row-divider"></div>
+
+      <!-- Row 2: month total, yesterday, largest today -->
+      <div class="metric-card gold">
+        <div class="metric-label">This Month</div>
+        <div class="metric-value" id="metricMonth">—</div>
+      </div>
+      <div class="metric-card muted">
+        <div class="metric-label">Yesterday</div>
+        <div class="metric-value" id="metricYesterday">—</div>
+      </div>
+      <div class="metric-card terra">
+        <div class="metric-label">Largest Today</div>
+        <div class="metric-value" id="metricLargest">—</div>
+      </div>
+
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ─── ADD ENTRY ─────────────────────────────── -->
+    <section class="form-card">
+      <h2><i class="fa-solid fa-pen-nib"></i> Record a spend</h2>
+
+      <div class="form-full">
+        <div class="field-wrap">
+          <label for="amount">Amount</label>
+          <input type="number" id="amount" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="form-full">
+        <div class="field-wrap">
+          <label for="description">What was it for</label>
+          <input type="text" id="description" maxlength="120" placeholder="Kiryana, chai, petrol…">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field-wrap">
+          <label for="date">Date</label>
+          <input type="date" id="date">
+        </div>
+        <div class="field-wrap">
+          <label for="time">Time</label>
+          <input type="time" id="time">
+        </div>
+      </div>
+
+      <div class="payment-group">
+        <button type="button" class="pay-btn active" data-pay="cash">
+          <i class="fa-solid fa-money-bill-wave"></i> Cash
+        </button>
+        <button type="button" class="pay-btn" data-pay="upi">
+          <i class="fa-solid fa-mobile-screen-button"></i> UPI
+        </button>
+      </div>
+
+      <button type="button" class="submit-btn" id="addBtn">
+        <i class="fa-solid fa-plus"></i> Add to ledger
+      </button>
+    </section>
+
+    <!-- ─── DATA TOOLBAR ──────────────────────────── -->
+    <div class="data-toolbar">
+      <span class="toolbar-label">Data</span>
+      <button type="button" class="toolbar-btn" id="exportJsonBtn">
+        <i class="fa-solid fa-file-arrow-down"></i> Export JSON
+      </button>
+      <button type="button" class="toolbar-btn" id="exportCsvBtn">
+        <i class="fa-solid fa-file-csv"></i> Export CSV
+      </button>
+      <span class="toolbar-divider"></span>
+      <button type="button" class="toolbar-btn import-btn" id="importBtn">
+        <i class="fa-solid fa-file-arrow-up"></i> Import
+      </button>
+      <button type="button" class="toolbar-btn undo-btn" id="undoBtn" hidden>
+        <i class="fa-solid fa-rotate-left"></i> Undo import
+      </button>
+      <input type="file" id="importFileInput" accept=".json,.csv,application/json,text/csv">
+    </div>
+
+    <!-- ─── IMPORT REPORT ─────────────────────────── -->
+    <div class="import-report" id="importReport" hidden>
+      <div class="ir-title">
+        <span id="irTitle">Import complete</span>
+        <button type="button" class="ir-close" id="irClose" aria-label="Dismiss report">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="ir-line" id="irLines"></div>
+      <div class="ir-detail" id="irDetail" hidden></div>
+    </div>
+
+    <!-- ─── ENTRIES ───────────────────────────────── -->
+    <div class="entries-header">
+      <h2>Entries</h2>
+      <span class="entry-count" id="entryCount">0 records</span>
+    </div>
+
+    <div class="filter-bar">
+      <button type="button" class="filter-btn active-all" data-filter="all">
+        <span class="filter-dot dot-all"></span> All
+      </button>
+      <button type="button" class="filter-btn" data-filter="cash">
+        <span class="filter-dot dot-cash"></span> Cash
+      </button>
+      <button type="button" class="filter-btn" data-filter="upi">
+        <span class="filter-dot dot-upi"></span> UPI
+      </button>
+    </div>
+
+    <div id="entriesList"></div>
+
+    <!-- ─── FILTER SUMMARY ────────────────────────── -->
+    <div class="filter-summary" id="filterSummary">
+      <div class="fs-header" id="fsHeader">
+        <div class="fs-icon" id="fsIcon"><i class="fa-solid fa-money-bill-wave"></i></div>
+        <div>
+          <div class="fs-title" id="fsTitle">Cash</div>
+          <div class="fs-subtitle" id="fsSubtitle">All records</div>
+        </div>
+      </div>
+      <div class="fs-body">
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsTotal">—</div>
+          <div class="fs-stat-label">Total</div>
+        </div>
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsCount">—</div>
+          <div class="fs-stat-label">Entries</div>
+        </div>
+        <div class="fs-stat">
+          <div class="fs-stat-value" id="fsShare">—</div>
+          <div class="fs-stat-label">Share</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   STORAGE — unchanged on purpose.
+   Keys:  'spends'   → array of entries
+          'currency' → 'INR' | 'USD' | 'EUR'
+   Entry: { date:'YYYY-MM-DD', time:'HH:MM', amount:Number,
+            description:String, payment:'cash'|'upi' }
+   ══════════════════════════════════════════════════════════ */
+const KEY_ENTRIES = 'spends';
+const KEY_CURRENCY = 'currency';
+
+const SYMBOL = { INR:'₹', USD:'$', EUR:'€' };
+const LOCALE = { INR:'en-IN', USD:'en-US', EUR:'de-DE' };
+
+let entries  = [];
+let currency = 'INR';
+let filter   = 'all';
+let payment  = 'cash';
+let undoState = null;   // snapshot taken immediately before an import
+
+const $ = s => document.querySelector(s);
+
+/* ─── Date & time helpers (local clock, not UTC) ──────── */
+const pad = n => String(n).padStart(2, '0');
+function localDate(d = new Date()) {
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function localTime(d = new Date()) {
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function shiftDate(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return localDate(dt);
+}
+function prettyDate(iso) {
+  const today = localDate();
+  if (iso === today) return 'Today';
+  if (iso === shiftDate(today, -1)) return 'Yesterday';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(LOCALE[currency] || 'en-GB',
+    { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/* ─── Money ───────────────────────────────────────────── */
+function money(n) {
+  const v = Number(n) || 0;
+  const s = v.toLocaleString(LOCALE[currency] || 'en-IN',
+    { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  return SYMBOL[currency] + s;
+}
+function parseMoney(text) {
+  const cleaned = String(text).replace(/[^0-9.\-]/g, '');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : NaN;
+}
+const escapeHtml = s => String(s).replace(/[&<>"']/g,
+  c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+/* ─── Toast ───────────────────────────────────────────── */
+let toastTimer = null;
+function toast(msg, kind = 'success') {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'show ' + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 2800);
+}
+
+/* ══════════════════════════════════════════════════════════
+   LOAD / SAVE
+   ══════════════════════════════════════════════════════════ */
+function sanitize(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const date = normDate(raw.date);
+  const amount = Number(raw.amount);
+  if (!date || !Number.isFinite(amount) || amount <= 0) return null;
+  return {
+    date,
+    time: normTime(raw.time) || '00:00',
+    amount: Math.round(amount * 100) / 100,
+    description: String(raw.description == null ? '' : raw.description).trim().slice(0, 120) || 'Unlabelled',
+    payment: normPayment(raw.payment)
+  };
+}
+function normPayment(v) {
+  const s = String(v == null ? '' : v).toLowerCase();
+  return /upi|online|digital|card|bank/.test(s) ? 'upi' : 'cash';
+}
+function normDate(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return isoOf(m[1], m[2], m[3]);
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);   // DD/MM/YYYY
+  if (m) return isoOf(m[3], m[2], m[1]);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : localDate(d);
+}
+function isoOf(y, m, d) {
+  const yy = Number(y), mm = Number(m), dd = Number(d);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  return yy + '-' + pad(mm) + '-' + pad(dd);
+}
+function normTime(v) {
+  if (v == null) return null;
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const mi = Number(m[2]);
+  const ap = m[3] && m[3].toLowerCase();
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  if (h > 23 || mi > 59) return null;
+  return pad(h) + ':' + pad(mi);
+}
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY_ENTRIES) || '[]');
+    entries = Array.isArray(raw) ? raw.map(sanitize).filter(Boolean) : [];
+  } catch (e) {
+    entries = [];
+    toast('Stored entries could not be read', 'error');
+  }
+  const c = localStorage.getItem(KEY_CURRENCY);
+  if (c && SYMBOL[c]) currency = c;
+  sortEntries();
+}
+function save() {
+  sortEntries();
+  try {
+    localStorage.setItem(KEY_ENTRIES, JSON.stringify(entries));
+  } catch (e) {
+    toast('Storage is full — export a backup', 'error');
+  }
+}
+function sortEntries() {
+  entries.sort((a, b) =>
+    b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+}
+
+/* ══════════════════════════════════════════════════════════
+   METRICS
+   ══════════════════════════════════════════════════════════ */
+function renderMetrics() {
+  const today = localDate();
+  const yest  = shiftDate(today, -1);
+  const month = today.slice(0, 7);
+
+  const todays = entries.filter(e => e.date === today);
+  const cash = todays.filter(e => e.payment === 'cash').reduce((s, e) => s + e.amount, 0);
+  const upi  = todays.filter(e => e.payment === 'upi').reduce((s, e) => s + e.amount, 0);
+  const monthTotal = entries.filter(e => e.date.startsWith(month)).reduce((s, e) => s + e.amount, 0);
+  const yestTotal  = entries.filter(e => e.date === yest).reduce((s, e) => s + e.amount, 0);
+  const largest    = todays.reduce((m, e) => Math.max(m, e.amount), 0);
+
+  $('#metricCash').textContent      = todays.length ? money(cash) : '—';
+  $('#metricUpi').textContent       = todays.length ? money(upi) : '—';
+  $('#metricTxnCount').textContent  = todays.length || '—';
+  $('#metricMonth').textContent     = monthTotal ? money(monthTotal) : '—';
+  $('#metricYesterday').textContent = yestTotal ? money(yestTotal) : '—';
+  $('#metricLargest').textContent   = largest ? money(largest) : '—';
+}
+
+/* ══════════════════════════════════════════════════════════
+   ENTRIES
+   ══════════════════════════════════════════════════════════ */
+function visible() {
+  return filter === 'all' ? entries : entries.filter(e => e.payment === filter);
+}
+
+function renderEntries() {
+  const list = $('#entriesList');
+  const rows = visible();
+
+  $('#entryCount').textContent =
+    rows.length + (rows.length === 1 ? ' record' : ' records');
+
+  if (!rows.length) {
+    list.innerHTML = entries.length
+      ? `<div class="empty-state">
+           <div class="empty-icon"><i class="fa-solid fa-filter-circle-xmark"></i></div>
+           <p>Nothing on this filter</p>
+           <span>Switch to All to see every record</span>
+         </div>`
+      : `<div class="empty-state">
+           <div class="empty-icon"><i class="fa-solid fa-receipt"></i></div>
+           <p>The ledger is empty</p>
+           <span>Record a spend above, or import a file</span>
+         </div>`;
+    return;
+  }
+
+  const groups = new Map();
+  rows.forEach(e => {
+    if (!groups.has(e.date)) groups.set(e.date, []);
+    groups.get(e.date).push(e);
+  });
+
+  let html = '';
+  groups.forEach((items, date) => {
+    const dayTotal = items.reduce((s, e) => s + e.amount, 0);
+    html += `<div class="date-group">
+      <div class="date-group-label">
+        <span>${escapeHtml(prettyDate(date))}</span>
+        <span class="date-group-total">${escapeHtml(money(dayTotal))}</span>
+      </div>`;
+    items.forEach(e => {
+      const i = entries.indexOf(e);
+      const icon = e.payment === 'cash'
+        ? 'fa-money-bill-wave' : 'fa-mobile-screen-button';
+      html += `<div class="entry-item" data-i="${i}">
+        <div class="pay-badge ${e.payment}"><i class="fa-solid ${icon}"></i></div>
+        <div class="entry-body">
+          <div class="entry-desc">
+            <span class="editable-field" contenteditable="true" data-edit="description"
+                  role="textbox" aria-label="Description">${escapeHtml(e.description)}</span><i class="fa-solid fa-pencil edit-hint"></i>
+          </div>
+          <div class="entry-meta">
+            <span class="editable-field editable-time" contenteditable="true" data-edit="time"
+                  role="textbox" aria-label="Time">${escapeHtml(e.time)}</span>
+            · ${e.payment.toUpperCase()}
+          </div>
+        </div>
+        <span class="editable-field editable-amount" contenteditable="true" data-edit="amount"
+              role="textbox" aria-label="Amount">${escapeHtml(money(e.amount))}</span>
+        <button type="button" class="delete-btn" data-delete="${i}" aria-label="Delete entry">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  list.innerHTML = html;
+}
+
+function renderFilterSummary() {
+  const box = $('#filterSummary');
+  if (filter === 'all') { box.classList.remove('visible'); return; }
+
+  const rows = visible();
+  const total = rows.reduce((s, e) => s + e.amount, 0);
+  const grand = entries.reduce((s, e) => s + e.amount, 0);
+  const cash = filter === 'cash';
+
+  $('#fsHeader').className = 'fs-header ' + (cash ? 'cash-theme' : 'upi-theme');
+  $('#fsIcon').innerHTML = `<i class="fa-solid ${cash ? 'fa-money-bill-wave' : 'fa-mobile-screen-button'}"></i>`;
+  $('#fsTitle').textContent = cash ? 'Cash' : 'UPI';
+  $('#fsSubtitle').textContent = 'All records';
+  $('#fsTotal').textContent = money(total);
+  $('#fsTotal').className = 'fs-stat-value ' + (cash ? 'highlight-cash' : 'highlight-upi');
+  $('#fsCount').textContent = rows.length;
+  $('#fsShare').textContent = grand ? Math.round(total / grand * 100) + '%' : '—';
+  box.classList.add('visible');
+}
+
+function render() {
+  renderMetrics();
+  renderEntries();
+  renderFilterSummary();
+}
+
+/* ══════════════════════════════════════════════════════════
+   ADD / EDIT / DELETE
+   ══════════════════════════════════════════════════════════ */
+function addEntry() {
+  const amount = Number($('#amount').value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    toast('Enter an amount above zero', 'error');
+    $('#amount').focus();
+    return;
+  }
+  const entry = sanitize({
+    date: $('#date').value || localDate(),
+    time: $('#time').value || localTime(),
+    amount,
+    description: $('#description').value || 'Unlabelled',
+    payment
+  });
+  if (!entry) { toast('That entry could not be read', 'error'); return; }
+
+  entries.push(entry);
+  save();
+  render();
+  toast('Added ' + money(entry.amount));
+
+  $('#amount').value = '';
+  $('#description').value = '';
+  $('#time').value = localTime();
+  $('#amount').focus();
+}
+
+function commitEdit(el) {
+  const item = el.closest('.entry-item');
+  const i = Number(item.dataset.i);
+  const e = entries[i];
+  if (!e) return;
+  const field = el.dataset.edit;
+  const text = el.textContent.trim();
+
+  if (field === 'amount') {
+    const n = parseMoney(text);
+    if (!Number.isFinite(n) || n <= 0) { toast('Amount must be above zero', 'error'); render(); return; }
+    e.amount = Math.round(n * 100) / 100;
+  } else if (field === 'time') {
+    const t = normTime(text);
+    if (!t) { toast('Time needs to look like 09:15', 'error'); render(); return; }
+    e.time = t;
+  } else {
+    e.description = text.slice(0, 120) || 'Unlabelled';
+  }
+  save();
+  render();
+  toast('Updated');
+}
+
+function deleteEntry(i) {
+  const e = entries[i];
+  if (!e) return;
+  entries.splice(i, 1);
+  save();
+  render();
+  toast('Deleted ' + money(e.amount));
+}
+
+/* ══════════════════════════════════════════════════════════
+   EXPORT
+   ══════════════════════════════════════════════════════════ */
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportJSON() {
+  if (!entries.length) { toast('Nothing to export yet', 'error'); return; }
+  const payload = {
+    meta: { tool: 'Spend Ledger', version: 'v1', exportedAt: new Date().toISOString(), count: entries.length },
+    currency,
+    entries
+  };
+  download(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
+    `spend-ledger-${localDate()}.json`);
+  toast(`Exported ${entries.length} entries`);
+}
+const csvCell = v => {
+  const s = String(v == null ? '' : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+function exportCSV() {
+  if (!entries.length) { toast('Nothing to export yet', 'error'); return; }
+  const rows = [['date', 'time', 'description', 'amount', 'payment']];
+  entries.forEach(e => rows.push([e.date, e.time, e.description, e.amount, e.payment]));
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
+  download(new Blob([csv], { type: 'text/csv' }), `spend-ledger-${localDate()}.csv`);
+  toast(`Exported ${entries.length} entries`);
+}
+
+/* ══════════════════════════════════════════════════════════
+   IMPORT — JSON or CSV, merged with duplicate protection
+   ══════════════════════════════════════════════════════════ */
+
+/* A duplicate is an exact match on every stored field. Matching is
+   count-aware: if the file holds two identical entries and the ledger
+   holds one, one is skipped and one is added. */
+const fingerprint = e =>
+  [e.date, e.time, e.amount.toFixed(2), e.description.toLowerCase(), e.payment].join('|');
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = false;
+      } else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (c !== '\r') cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+function rowsFromCSV(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return { rows: [], error: 'The file has no rows' };
+
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const find = (...names) => head.findIndex(h => names.some(n => h.includes(n)));
+  let idx = {
+    date: find('date', 'day'),
+    time: find('time'),
+    description: find('description', 'desc', 'detail', 'item', 'note', 'particular'),
+    amount: find('amount', 'value', 'spend', 'total'),
+    payment: find('payment', 'mode', 'method', 'type')
+  };
+  let body = rows.slice(1);
+
+  // No recognisable header — assume date, time, description, amount, payment
+  if (idx.date < 0 && idx.amount < 0) {
+    idx = { date: 0, time: 1, description: 2, amount: 3, payment: 4 };
+    body = rows;
+  }
+  const pick = (r, i) => (i >= 0 && i < r.length ? r[i] : '');
+  return {
+    rows: body.map(r => ({
+      date: pick(r, idx.date),
+      time: pick(r, idx.time),
+      description: pick(r, idx.description),
+      amount: parseMoney(pick(r, idx.amount)),
+      payment: pick(r, idx.payment)
+    }))
+  };
+}
+
+function rowsFromJSON(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) { return { rows: [], error: 'That file is not valid JSON' }; }
+
+  let list = null, cur = null;
+  if (Array.isArray(parsed)) list = parsed;
+  else if (parsed && typeof parsed === 'object') {
+    list = parsed.entries || parsed.spends || parsed.data || null;
+    if (parsed.currency && SYMBOL[parsed.currency]) cur = parsed.currency;
+  }
+  if (!Array.isArray(list)) return { rows: [], error: 'No entries found in that file' };
+  return { rows: list, currency: cur };
+}
+
+function importFile(file) {
+  if (!file) return;
+  const isCSV = /\.csv$/i.test(file.name) || file.type === 'text/csv';
+  const reader = new FileReader();
+  reader.onerror = () => toast('Could not read that file', 'error');
+  reader.onload = () => {
+    const text = String(reader.result || '');
+    const parsed = isCSV ? rowsFromCSV(text) : rowsFromJSON(text);
+    if (parsed.error) { toast(parsed.error, 'error'); return; }
+    if (!parsed.rows.length) { toast('That file holds no rows', 'error'); return; }
+
+    const clean = [], rejected = [];
+    parsed.rows.forEach((raw, n) => {
+      const e = sanitize(raw);
+      if (e) clean.push(e);
+      else rejected.push(`row ${n + 1}: ${describeReject(raw)}`);
+    });
+
+    if (!clean.length) {
+      showReport('Nothing imported', [
+        { text: `<b>0</b> of ${parsed.rows.length} rows were usable`, cls: 'bad' }
+      ], rejected, true);
+      toast('No usable rows in that file', 'error');
+      return;
+    }
+
+    undoState = entries.slice();
+
+    const counts = new Map();
+    entries.forEach(e => {
+      const f = fingerprint(e);
+      counts.set(f, (counts.get(f) || 0) + 1);
+    });
+
+    let added = 0, skipped = 0;
+    clean.forEach(e => {
+      const f = fingerprint(e);
+      const c = counts.get(f) || 0;
+      if (c > 0) { counts.set(f, c - 1); skipped++; return; }
+      entries.push(e);
+      added++;
+    });
+
+    if (parsed.currency && parsed.currency !== currency) {
+      currency = parsed.currency;
+      localStorage.setItem(KEY_CURRENCY, currency);
+      $('#currency').value = currency;
+    }
+
+    save();
+    render();
+    $('#undoBtn').hidden = false;
+
+    const lines = [{ text: `<b>${added}</b> added from ${file.name}` }];
+    if (skipped)  lines.push({ text: `<b>${skipped}</b> skipped as already present`, cls: 'skip' });
+    if (rejected.length) lines.push({ text: `<b>${rejected.length}</b> rejected as unreadable`, cls: 'bad' });
+    showReport(added ? 'Import merged' : 'Nothing new to add', lines, rejected, !added);
+
+    toast(added ? `Imported ${added} entries` : 'Every row was already here');
+  };
+  reader.readAsText(file);
+}
+
+function describeReject(raw) {
+  if (!raw || typeof raw !== 'object') return 'not a record';
+  if (!normDate(raw.date)) return `unreadable date "${String(raw.date || '').slice(0, 20)}"`;
+  const n = Number(raw.amount);
+  if (!Number.isFinite(n)) return 'unreadable amount';
+  if (n <= 0) return 'amount is zero or negative';
+  return 'incomplete record';
+}
+
+function showReport(title, lines, detail, warn) {
+  $('#irTitle').textContent = title;
+  $('#irLines').innerHTML = lines
+    .map(l => `<div class="ir-line ${l.cls || ''}">${l.text}</div>`).join('');
+  const d = $('#irDetail');
+  if (detail && detail.length) {
+    d.textContent = detail.slice(0, 40).join('  ·  ') +
+      (detail.length > 40 ? `  ·  …and ${detail.length - 40} more` : '');
+    d.hidden = false;
+  } else d.hidden = true;
+  const box = $('#importReport');
+  box.className = 'import-report' + (warn ? ' warn' : '');
+  box.hidden = false;
+}
+
+function undoImport() {
+  if (!undoState) return;
+  entries = undoState;
+  undoState = null;
+  save();
+  render();
+  $('#undoBtn').hidden = true;
+  $('#importReport').hidden = true;
+  toast('Import undone');
+}
+
+/* ══════════════════════════════════════════════════════════
+   WIRING
+   ══════════════════════════════════════════════════════════ */
+function bind() {
+  $('#addBtn').addEventListener('click', addEntry);
+
+  document.querySelectorAll('.pay-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      payment = b.dataset.pay;
+      document.querySelectorAll('.pay-btn').forEach(x =>
+        x.classList.toggle('active', x === b));
+    });
+  });
+
+  ['#amount', '#description'].forEach(sel => {
+    $(sel).addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addEntry(); }
+    });
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      filter = b.dataset.filter;
+      document.querySelectorAll('.filter-btn').forEach(x => {
+        x.className = 'filter-btn' +
+          (x.dataset.filter === filter ? ' active-' + filter : '');
+      });
+      render();
+    });
+  });
+
+  $('#currency').addEventListener('change', e => {
+    currency = e.target.value;
+    localStorage.setItem(KEY_CURRENCY, currency);
+    render();
+    toast('Showing amounts in ' + currency);
+  });
+
+  const list = $('#entriesList');
+  list.addEventListener('click', e => {
+    const del = e.target.closest('[data-delete]');
+    if (del) deleteEntry(Number(del.dataset.delete));
+  });
+  list.addEventListener('blur', e => {
+    if (e.target.dataset && e.target.dataset.edit) commitEdit(e.target);
+  }, true);
+  list.addEventListener('keydown', e => {
+    if (!e.target.dataset || !e.target.dataset.edit) return;
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); render(); }
+  });
+
+  $('#exportJsonBtn').addEventListener('click', exportJSON);
+  $('#exportCsvBtn').addEventListener('click', exportCSV);
+  $('#importBtn').addEventListener('click', () => $('#importFileInput').click());
+  $('#importFileInput').addEventListener('change', e => {
+    importFile(e.target.files[0]);
+    e.target.value = '';
+  });
+  $('#undoBtn').addEventListener('click', undoImport);
+  $('#irClose').addEventListener('click', () => { $('#importReport').hidden = true; });
+
+  /* Drag a file anywhere on the page */
+  let dragDepth = 0;
+  window.addEventListener('dragenter', e => {
+    e.preventDefault();
+    if (++dragDepth === 1) document.body.classList.add('dropping');
+  });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('dragleave', () => {
+    if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dropping'); }
+  });
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove('dropping');
+    if (e.dataTransfer && e.dataTransfer.files[0]) importFile(e.dataTransfer.files[0]);
+  });
+
+  /* Another tab wrote to the ledger */
+  window.addEventListener('storage', e => {
+    if (e.key === KEY_ENTRIES) { load(); render(); }
+  });
+}
+
+function init() {
+  load();
+  $('#currency').value = currency;
+  $('#date').value = localDate();
+  $('#time').value = localTime();
+  bind();
+  render();
+}
+init();
+</script>
+</body>
+</html>
