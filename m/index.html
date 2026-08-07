@@ -605,15 +605,50 @@ function streamAnnualActual(y,s){
   return s.kind==='manual' ? manualAnnual(y,s) : (streamNet(y,s) || 0);
 }
 
-/* One stream's contribution to one month, full precision. */
+/* What this source actually pays out during THIS year — counting only the
+   payouts that fall while it is still live. This is the single figure both
+   views distribute, so cash and spread can never disagree on the year. */
+function streamYearNet(y,s){
+  if(s.kind==='manual') return manualAnnual(y,s);
+  const n = streamNet(y,s);
+  if(n==null) return null;
+  const per = n / FREQ[s.freq||'halfyearly'];
+  let t=0;
+  payoutMonths(s.freq, s.anchor).forEach(m=>{ if(!streamEnded(s,y,m)) t += per; });
+  return t;
+}
+function streamYearGross(y,s){
+  if(s.kind==='manual') return manualAnnual(y,s);
+  const g = streamGross(y,s), n = streamNet(y,s);
+  if(g==null || n==null) return null;
+  if(n===0) return 0;
+  return g * (streamYearNet(y,s) / n);   /* same proportion of the year */
+}
+
+/* How many months of this year the source is still live. */
+function streamActiveMonths(y,s){
+  let n=0;
+  for(let m=1;m<=12;m++) if(!streamEnded(s,y,m)) n++;
+  return n;
+}
+
+/* One stream's contribution to one month, full precision.
+   CASH   — the lump sits in the month it is paid.
+   SPREAD — the year's entitlement levelled across the months the source is
+            LIVE, not across all twelve. If a source dies in June, the levelled
+            view must show sustenance dropping in July, or you would commit to
+            a monthly figure that no longer exists.
+   Both distribute streamYearNet, so the two views always agree on the year. */
 function streamIn(y,m,s,mode){
   if(s.kind==='manual') return read(y,m,s.id) || 0;
   const n = streamNet(y,s);
   if(n==null) return 0;
   if(streamEnded(s,y,m)) return 0;
-  if(mode==='spread') return n/12;
-  const ms = payoutMonths(s.freq, s.anchor);
-  return ms.includes(m) ? n/FREQ[s.freq] : 0;
+  if(mode==='spread'){
+    const t = streamYearNet(y,s), act = streamActiveMonths(y,s);
+    return (t==null || act===0) ? 0 : t/act;
+  }
+  return payoutMonths(s.freq, s.anchor).includes(m) ? n/FREQ[s.freq] : 0;
 }
 function streamConfigured(y,s){
   return s.kind==='manual' ? true : streamNet(y,s)!=null;
@@ -711,10 +746,10 @@ function yearTotals(y,mode){
 function taxSummary(y){
   let gross=0, exempt=0, taxable=0, tds=0;
   streams(y).forEach(s=>{
-    const g = s.kind==='manual' ? manualAnnual(y,s) : (streamGross(y,s) || 0);
+    const g = s.kind==='manual' ? manualAnnual(y,s) : (streamYearGross(y,s) || 0);
     gross += g;
     if(s.taxable) taxable += g; else exempt += g;
-    tds += s.kind==='manual' ? 0 : streamTds(y,s);
+    tds += s.kind==='manual' ? 0 : ((streamYearGross(y,s)||0) - (streamYearNet(y,s)||0));
   });
   const threshold = Number(state.settings.tax.threshold) || 0;
   return {gross, exempt, taxable, tds, threshold, over:Math.max(0, taxable-threshold), net:gross-tds};
@@ -883,7 +918,10 @@ function streamLines(s){
       ? `nothing lands this month — next payout ${MOF[np.m-1]}${np.y!==year?' '+np.y:''} · ${money(net/FREQ[s.freq])}. Switch to Spread for the monthly figure (${money(net/12)}).`
       : 'no further payouts — this source has ended'};
   }
-  return {amt, sub:`${money(net)} a year ÷ 12`};
+  const yr = streamYearNet(year,s), act = streamActiveMonths(year,s);
+  return {amt, sub: (act<12)
+    ? `${money(yr)} due in ${year} ÷ ${act} live month${act===1?'':'s'} — ends ${esc(s.end)}`
+    : `${money(net)} a year ÷ 12`};
 }
 
 function streamBlock(s){
@@ -1313,7 +1351,7 @@ function buildStatement(){
       : s.kind==='deposit' ? `${money(s.principal)} at ${s.rate||0}%${Number(s.tds)?`, TDS ${s.tds}%`:', no TDS'}`
       : s.kind==='fixed' ? 'fixed annual amount' : 'entered by hand each month';
     const sched = s.kind==='manual' ? 'monthly' : `${FREQ_LABEL[s.freq||'halfyearly']} — ${payoutMonths(s.freq,s.anchor).map(x=>MO[x-1]).join(', ')}`;
-    const annual = s.kind==='manual' ? manualAnnual(year,s) : net;
+    const annual = streamYearNet(year,s);
     return `<tr><td>${esc(s.name)}</td><td style="text-align:left">${esc(basis)}</td><td style="text-align:left">${esc(sched)}</td>
       <td>${s.taxable?'Taxable':'Exempt'}</td><td>${money(annual)}</td></tr>`;
   }).join('');
@@ -1472,10 +1510,17 @@ function systemCheck(){
   const ids = streams(year).map(s=>s.id);
   ids.length===new Set(ids).size ? ok('Stream ids unique', ids.join(', ')) : bad('Stream ids unique','duplicate id present');
 
-  let annual=0; streams(year).forEach(s=>{ annual += s.kind==='manual'?manualAnnual(year,s):(streamNet(year,s)||0); });
+  let annual=0; streams(year).forEach(s=>{ annual += streamYearNet(year,s)||0; });
   let sumS=0, sumC=0;
   for(let m=1;m<=12;m++){ sumS+=inflow(year,m,'spread').total; sumC+=inflow(year,m,'cash').total; }
-  near(sumS,sumC) ? ok('Views agree on annual income', money(sumS)) : bad('Views agree on annual income', `spread ${sumS} vs cash ${sumC}`);
+  if(near(sumS,sumC)) ok('Views agree on annual income', money(sumS));
+  else {
+    const off = streams(year).filter(s=>{
+      let a=0,b=0; for(let m=1;m<=12;m++){ a+=streamIn(year,m,s,'spread'); b+=streamIn(year,m,s,'cash'); }
+      return Math.abs(a-b)>=0.01;
+    }).map(s=>s.name);
+    bad('Views agree on annual income', `spread ${Math.round(sumS)} vs cash ${Math.round(sumC)}${off.length?' — disagreeing source(s): '+off.join(', '):''}`);
+  }
   near(sumS,annual) ? ok('Income reconciles to sources', money(annual)) : bad('Income reconciles to sources', `months ${sumS} vs sources ${annual}`);
 
   let potFail=0;
