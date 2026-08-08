@@ -325,6 +325,9 @@
     }
 
     .pay-badge {
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.15s, box-shadow 0.15s;
       width: 34px; height: 34px;
       border-radius: 8px;
       display: flex; align-items: center;
@@ -340,6 +343,23 @@
       background: rgba(28,69,50,0.1);
       color: var(--forest);
     }
+    .pay-badge:hover {
+      transform: scale(1.06);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .badge-swap {
+      position: absolute;
+      right: -3px; bottom: -3px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--white);
+      border: 1px solid var(--cream-dark);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.4rem;
+      color: var(--ink-muted);
+      pointer-events: none;
+    }
+    .pay-badge:hover .badge-swap { color: var(--forest); border-color: var(--forest-light); }
 
     .entry-body { flex: 1; min-width: 0; }
     .entry-desc {
@@ -695,6 +715,52 @@
       pointer-events: none;
     }
 
+    /* ─── STATEMENT OVERLAY ──────────────────────── */
+    .stmt-overlay {
+      position: fixed; inset: 0;
+      background: var(--cream);
+      z-index: 800;
+      display: flex; flex-direction: column;
+    }
+    .stmt-overlay[hidden] { display: none; }
+    .stmt-bar {
+      background: var(--forest);
+      padding: 12px 16px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      box-shadow: 0 2px 12px rgba(28,69,50,0.25);
+      flex-shrink: 0;
+    }
+    .stmt-bar-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      flex: 1; text-align: center;
+    }
+    .stmt-act {
+      padding: 7px 12px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.1);
+      color: var(--white);
+      font-family: 'DM Mono', monospace; font-size: 0.68rem;
+      letter-spacing: 0.05em; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: background 0.2s;
+    }
+    .stmt-act:hover { background: rgba(255,255,255,0.22); }
+    .stmt-act.primary { background: var(--white); color: var(--forest); border-color: var(--white); font-weight: 500; }
+    .stmt-scroll { flex: 1; overflow-y: auto; padding: 20px 12px 48px; }
+
+    @media print {
+      body > *:not(.stmt-overlay) { display: none !important; }
+      body { background: #fff; padding: 0; }
+      body::before { display: none; }
+      .stmt-overlay { position: static; background: #fff; }
+      .stmt-bar { display: none !important; }
+      .stmt-scroll { overflow: visible; padding: 0; }
+      .stmt-day { break-inside: avoid; }
+    }
+
+
     /* ─── TOAST ──────────────────────────────────── */
     #toast {
       position: fixed; bottom: 28px; left: 50%;
@@ -783,11 +849,11 @@
 
       <!-- Row 2: month total, yesterday, largest today -->
       <div class="metric-card gold">
-        <div class="metric-label">This Month</div>
+        <div class="metric-label" id="labelMonth">This Month</div>
         <div class="metric-value" id="metricMonth">—</div>
       </div>
       <div class="metric-card muted">
-        <div class="metric-label">Yesterday</div>
+        <div class="metric-label" id="labelYesterday">Yesterday</div>
         <div class="metric-value" id="metricYesterday">—</div>
       </div>
       <div class="metric-card terra">
@@ -830,10 +896,10 @@
       </div>
 
       <div class="payment-group">
-        <button type="button" class="pay-btn active" data-pay="cash">
+        <button type="button" class="pay-btn" data-pay="cash">
           <i class="fa-solid fa-money-bill-wave"></i> Cash
         </button>
-        <button type="button" class="pay-btn" data-pay="upi">
+        <button type="button" class="pay-btn active" data-pay="upi">
           <i class="fa-solid fa-mobile-screen-button"></i> UPI
         </button>
       </div>
@@ -851,6 +917,10 @@
       </button>
       <button type="button" class="toolbar-btn" id="exportCsvBtn">
         <i class="fa-solid fa-file-csv"></i> Export CSV
+      </button>
+      <span class="toolbar-divider"></span>
+      <button type="button" class="toolbar-btn" id="statementBtn">
+        <i class="fa-solid fa-file-lines"></i> Statement
       </button>
       <span class="toolbar-divider"></span>
       <button type="button" class="toolbar-btn import-btn" id="importBtn">
@@ -921,6 +991,16 @@
 
   </main>
 
+  <div class="stmt-overlay" id="stmtOverlay" hidden>
+    <div class="stmt-bar">
+      <button type="button" class="stmt-act" id="stmtClose"><i class="fa-solid fa-xmark"></i> Close</button>
+      <span class="stmt-bar-label" id="stmtScope">Preview</span>
+      <button type="button" class="stmt-act" id="stmtDownload"><i class="fa-solid fa-download"></i> Download page</button>
+      <button type="button" class="stmt-act primary" id="stmtPrint"><i class="fa-solid fa-file-pdf"></i> Print / Save as PDF</button>
+    </div>
+    <div class="stmt-scroll"><div class="stmt-page" id="stmtPage"></div></div>
+  </div>
+
   <div id="toast"></div>
 
 <script>
@@ -942,7 +1022,7 @@ const LOCALE = { INR:'en-IN', USD:'en-US', EUR:'de-DE' };
 let entries  = [];
 let currency = 'INR';
 let filter   = 'all';
-let payment  = 'cash';
+let payment  = 'upi';
 let undoState = null;   // snapshot taken immediately before an import
 
 const $ = s => document.querySelector(s);
@@ -997,22 +1077,66 @@ function toast(msg, kind = 'success') {
 /* ══════════════════════════════════════════════════════════
    LOAD / SAVE
    ══════════════════════════════════════════════════════════ */
-function sanitize(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const date = normDate(raw.date);
-  const amount = Number(raw.amount);
-  if (!date || !Number.isFinite(amount) || amount <= 0) return null;
-  return {
-    date,
-    time: normTime(raw.time) || '00:00',
-    amount: Math.round(amount * 100) / 100,
-    description: String(raw.description == null ? '' : raw.description).trim().slice(0, 120) || 'Unlabelled',
-    payment: normPayment(raw.payment)
-  };
+/* Field names vary between tools and exports. Read each field under any
+   of its common aliases rather than assuming one spelling. */
+const FIELD = {
+  date:        ['date','txndate','transactiondate','entrydate','day','on'],
+  time:        ['time','at','clock','timestamp'],
+  amount:      ['amount','amt','value','spend','spent','total','price','cost','sum','debit'],
+  description: ['description','desc','details','detail','item','note','notes','particulars','narration','title','merchant','label','for'],
+  payment:     ['payment','paymentmode','paymentmethod','paymenttype','paymode','mode','method','type','paidby','paidvia','via','channel','instrument','tender','source']
+};
+const keyNorm = k => String(k).toLowerCase().replace(/[^a-z]/g, '');
+function pickField(raw, kind) {
+  const keys = Object.keys(raw);
+  for (const name of FIELD[kind]) {
+    const k = keys.find(x => keyNorm(x) === name);
+    if (k != null) {
+      const v = raw[k];
+      if (v != null && String(v).trim() !== '') return v;
+    }
+  }
+  return undefined;
 }
+
+/* Runtime identity only — non-enumerable, so it is never written to storage. */
+let uidSeq = 0;
+function tag(e) {
+  if (!e._uid) Object.defineProperty(e, '_uid',
+    { value: 'e' + (++uidSeq), enumerable: false, configurable: true });
+  return e;
+}
+const byUid = uid => entries.find(e => e._uid === uid);
+
+function sanitize(raw, meta) {
+  if (!raw || typeof raw !== 'object') return null;
+  const date = normDate(pickField(raw, 'date'));
+  const amount = parseMoney(pickField(raw, 'amount'));
+  if (!date || !Number.isFinite(amount) || amount <= 0) return null;
+
+  const pay = normPayment(pickField(raw, 'payment'));
+  if (meta && pay.assumed) meta.assumed++;
+
+  // Keep every original field. Only the five known ones are normalised.
+  const out = Object.assign({}, raw);
+  out.date = date;
+  out.time = normTime(pickField(raw, 'time')) || '00:00';
+  out.amount = Math.round(amount * 100) / 100;
+  out.description = String(pickField(raw, 'description') || '').trim().slice(0, 120) || 'Unlabelled';
+  out.payment = pay.value;
+  return out;
+}
+
+/* Returns { value, assumed }. `assumed` is true when nothing in the record
+   said how it was paid — the caller reports that rather than hiding it. */
 function normPayment(v) {
-  const s = String(v == null ? '' : v).toLowerCase();
-  return /upi|online|digital|card|bank/.test(s) ? 'upi' : 'cash';
+  const s = String(v == null ? '' : v).toLowerCase().trim();
+  if (!s) return { value: 'upi', assumed: true };
+  if (/upi|online|digital|net.?bank|g(oogle)?.?pay|phonepe|paytm|bhim|card|swipe|neft|imps|rtgs|transfer|wallet|bank/.test(s))
+    return { value: 'upi', assumed: false };
+  if (/cash|currency|note|hand|physical/.test(s))
+    return { value: 'cash', assumed: false };
+  return { value: 'upi', assumed: true };
 }
 function normDate(v) {
   if (v == null) return null;
@@ -1045,7 +1169,8 @@ function normTime(v) {
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY_ENTRIES) || '[]');
-    entries = Array.isArray(raw) ? raw.map(sanitize).filter(Boolean) : [];
+    entries = Array.isArray(raw)
+      ? raw.map(r => sanitize(r)).filter(Boolean).map(tag) : [];
   } catch (e) {
     entries = [];
     toast('Stored entries could not be read', 'error');
@@ -1078,9 +1203,17 @@ function renderMetrics() {
   const todays = entries.filter(e => e.date === today);
   const cash = todays.filter(e => e.payment === 'cash').reduce((s, e) => s + e.amount, 0);
   const upi  = todays.filter(e => e.payment === 'upi').reduce((s, e) => s + e.amount, 0);
-  const monthTotal = entries.filter(e => e.date.startsWith(month)).reduce((s, e) => s + e.amount, 0);
-  const yestTotal  = entries.filter(e => e.date === yest).reduce((s, e) => s + e.amount, 0);
+  const monthRows = entries.filter(e => e.date.startsWith(month));
+  const yestRows  = entries.filter(e => e.date === yest);
+  const monthTotal = monthRows.reduce((s, e) => s + e.amount, 0);
+  const yestTotal  = yestRows.reduce((s, e) => s + e.amount, 0);
   const largest    = todays.reduce((m, e) => Math.max(m, e.amount), 0);
+
+  const plural = n => n + (n === 1 ? ' txn' : ' txns');
+  $('#labelMonth').textContent =
+    'This Month' + (monthRows.length ? ' · ' + plural(monthRows.length) : '');
+  $('#labelYesterday').textContent =
+    'Yesterday' + (yestRows.length ? ' · ' + plural(yestRows.length) : '');
 
   $('#metricCash').textContent      = todays.length ? money(cash) : '—';
   $('#metricUpi').textContent       = todays.length ? money(upi) : '—';
@@ -1131,14 +1264,14 @@ function renderEntries() {
     html += `<div class="date-group">
       <div class="date-group-label">
         <span>${escapeHtml(prettyDate(date))}</span>
-        <span class="date-group-total">${escapeHtml(money(dayTotal))}</span>
+        <span class="date-group-total">${items.length} · ${escapeHtml(money(dayTotal))}</span>
       </div>`;
     items.forEach(e => {
-      const i = entries.indexOf(e);
       const icon = e.payment === 'cash'
         ? 'fa-money-bill-wave' : 'fa-mobile-screen-button';
-      html += `<div class="entry-item" data-i="${i}">
-        <div class="pay-badge ${e.payment}"><i class="fa-solid ${icon}"></i></div>
+      html += `<div class="entry-item" data-uid="${e._uid}">
+        <div class="pay-badge ${e.payment}" role="button" tabindex="0"
+             title="Switch between cash and UPI"><i class="fa-solid ${icon}"></i><span class="badge-swap"><i class="fa-solid fa-right-left"></i></span></div>
         <div class="entry-body">
           <div class="entry-desc">
             <span class="editable-field" contenteditable="true" data-edit="description"
@@ -1152,7 +1285,7 @@ function renderEntries() {
         </div>
         <span class="editable-field editable-amount" contenteditable="true" data-edit="amount"
               role="textbox" aria-label="Amount">${escapeHtml(money(e.amount))}</span>
-        <button type="button" class="delete-btn" data-delete="${i}" aria-label="Delete entry">
+        <button type="button" class="delete-btn" data-delete="${e._uid}" aria-label="Delete entry">
           <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>`;
@@ -1207,7 +1340,7 @@ function addEntry() {
   });
   if (!entry) { toast('That entry could not be read', 'error'); return; }
 
-  entries.push(entry);
+  entries.push(tag(entry));
   save();
   render();
   toast('Added ' + money(entry.amount));
@@ -1220,31 +1353,56 @@ function addEntry() {
 
 function commitEdit(el) {
   const item = el.closest('.entry-item');
-  const i = Number(item.dataset.i);
-  const e = entries[i];
-  if (!e) return;
+  if (!item) return;
+  const e = byUid(item.dataset.uid);
+  if (!e) return;                       // row was deleted mid-edit
   const field = el.dataset.edit;
   const text = el.textContent.trim();
 
   if (field === 'amount') {
     const n = parseMoney(text);
     if (!Number.isFinite(n) || n <= 0) { toast('Amount must be above zero', 'error'); render(); return; }
-    e.amount = Math.round(n * 100) / 100;
+    const v = Math.round(n * 100) / 100;
+    if (v === e.amount) { el.textContent = money(e.amount); return; }
+    e.amount = v;
   } else if (field === 'time') {
     const t = normTime(text);
     if (!t) { toast('Time needs to look like 09:15', 'error'); render(); return; }
+    if (t === e.time) { el.textContent = e.time; return; }
     e.time = t;
   } else {
-    e.description = text.slice(0, 120) || 'Unlabelled';
+    const d = text.slice(0, 120) || 'Unlabelled';
+    if (d === e.description) { el.textContent = e.description; return; }
+    e.description = d;
   }
   save();
   render();
   toast('Updated');
 }
 
-function deleteEntry(i) {
-  const e = entries[i];
+/* A record may carry its mode under several names (payment, paymentType…).
+   Write the new value to every one present, or they drift apart and the
+   next reader picks the stale one. */
+function setPayment(entry, value) {
+  entry.payment = value;
+  Object.keys(entry).forEach(k => {
+    if (k !== 'payment' && FIELD.payment.includes(keyNorm(k))) entry[k] = value;
+  });
+}
+
+function togglePayment(uid) {
+  const e = byUid(uid);
   if (!e) return;
+  setPayment(e, e.payment === 'cash' ? 'upi' : 'cash');
+  save();
+  render();
+  toast('Marked as ' + e.payment.toUpperCase());
+}
+
+function deleteEntry(uid) {
+  const i = entries.findIndex(e => e._uid === uid);
+  if (i < 0) return;
+  const e = entries[i];
   entries.splice(i, 1);
   save();
   render();
@@ -1261,12 +1419,23 @@ function download(blob, filename) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+/* Written under both names: `payment` for this build, `paymentType` for the
+   original ledger and anything else that reads that spelling. A file that
+   names the mode only one way is a file that loses it on the next import. */
+function exportRows() {
+  return entries.map(e => {
+    const out = Object.assign({}, e);
+    out.payment = e.payment;
+    out.paymentType = e.payment;
+    return out;
+  });
+}
 function exportJSON() {
   if (!entries.length) { toast('Nothing to export yet', 'error'); return; }
   const payload = {
     meta: { tool: 'Spend Ledger', version: 'v1', exportedAt: new Date().toISOString(), count: entries.length },
     currency,
-    entries
+    entries: exportRows()
   };
   download(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
     `spend-ledger-${localDate()}.json`);
@@ -1278,8 +1447,8 @@ const csvCell = v => {
 };
 function exportCSV() {
   if (!entries.length) { toast('Nothing to export yet', 'error'); return; }
-  const rows = [['date', 'time', 'description', 'amount', 'payment']];
-  entries.forEach(e => rows.push([e.date, e.time, e.description, e.amount, e.payment]));
+  const rows = [['date', 'time', 'description', 'amount', 'payment', 'paymentType']];
+  entries.forEach(e => rows.push([e.date, e.time, e.description, e.amount, e.payment, e.payment]));
   const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
   download(new Blob([csv], { type: 'text/csv' }), `spend-ledger-${localDate()}.csv`);
   toast(`Exported ${entries.length} entries`);
@@ -1289,11 +1458,13 @@ function exportCSV() {
    IMPORT — JSON or CSV, merged with duplicate protection
    ══════════════════════════════════════════════════════════ */
 
-/* A duplicate is an exact match on every stored field. Matching is
-   count-aware: if the file holds two identical entries and the ledger
-   holds one, one is skipped and one is added. */
-const fingerprint = e =>
-  [e.date, e.time, e.amount.toFixed(2), e.description.toLowerCase(), e.payment].join('|');
+/* A duplicate is a match on date, time, amount and description — the four
+   facts of the transaction. Payment mode is deliberately excluded: if the
+   file disagrees with the ledger about cash vs UPI, that is the same
+   transaction recorded wrongly, and the file corrects it. Matching stays
+   count-aware, so two identical ₹20 chai in the file survive as two. */
+const coreFP = e =>
+  [e.date, e.time, e.amount.toFixed(2), e.description.toLowerCase()].join('|');
 
 function parseCSV(text) {
   const rows = [];
@@ -1318,14 +1489,16 @@ function rowsFromCSV(text) {
   const rows = parseCSV(text);
   if (!rows.length) return { rows: [], error: 'The file has no rows' };
 
-  const head = rows[0].map(h => h.trim().toLowerCase());
-  const find = (...names) => head.findIndex(h => names.some(n => h.includes(n)));
+  const head = rows[0].map(h => keyNorm(h));
+  const find = kind => {
+    let i = head.findIndex(h => FIELD[kind].includes(h));        // exact alias
+    if (i < 0) i = head.findIndex(h => FIELD[kind].some(n => h.includes(n)));
+    return i;
+  };
   let idx = {
-    date: find('date', 'day'),
-    time: find('time'),
-    description: find('description', 'desc', 'detail', 'item', 'note', 'particular'),
-    amount: find('amount', 'value', 'spend', 'total'),
-    payment: find('payment', 'mode', 'method', 'type')
+    date: find('date'), time: find('time'),
+    description: find('description'), amount: find('amount'),
+    payment: find('payment')
   };
   let body = rows.slice(1);
 
@@ -1340,7 +1513,7 @@ function rowsFromCSV(text) {
       date: pick(r, idx.date),
       time: pick(r, idx.time),
       description: pick(r, idx.description),
-      amount: parseMoney(pick(r, idx.amount)),
+      amount: pick(r, idx.amount),
       payment: pick(r, idx.payment)
     }))
   };
@@ -1372,9 +1545,9 @@ function importFile(file) {
     if (parsed.error) { toast(parsed.error, 'error'); return; }
     if (!parsed.rows.length) { toast('That file holds no rows', 'error'); return; }
 
-    const clean = [], rejected = [];
+    const clean = [], rejected = [], meta = { assumed: 0 };
     parsed.rows.forEach((raw, n) => {
-      const e = sanitize(raw);
+      const e = sanitize(raw, meta);
       if (e) clean.push(e);
       else rejected.push(`row ${n + 1}: ${describeReject(raw)}`);
     });
@@ -1387,20 +1560,25 @@ function importFile(file) {
       return;
     }
 
-    undoState = entries.slice();
+    undoState = entries.map(e => Object.assign({}, e));
 
-    const counts = new Map();
+    const queues = new Map();
     entries.forEach(e => {
-      const f = fingerprint(e);
-      counts.set(f, (counts.get(f) || 0) + 1);
+      const f = coreFP(e);
+      if (!queues.has(f)) queues.set(f, []);
+      queues.get(f).push(e);
     });
 
-    let added = 0, skipped = 0;
+    let added = 0, skipped = 0, corrected = 0;
     clean.forEach(e => {
-      const f = fingerprint(e);
-      const c = counts.get(f) || 0;
-      if (c > 0) { counts.set(f, c - 1); skipped++; return; }
-      entries.push(e);
+      const q = queues.get(coreFP(e));
+      const match = q && q.length ? q.shift() : null;
+      if (match) {
+        if (match.payment !== e.payment) { setPayment(match, e.payment); corrected++; }
+        else skipped++;
+        return;
+      }
+      entries.push(tag(e));
       added++;
     });
 
@@ -1414,20 +1592,26 @@ function importFile(file) {
     render();
     $('#undoBtn').hidden = false;
 
-    const lines = [{ text: `<b>${added}</b> added from ${file.name}` }];
-    if (skipped)  lines.push({ text: `<b>${skipped}</b> skipped as already present`, cls: 'skip' });
+    const lines = [{ text: `<b>${added}</b> added from ${escapeHtml(file.name)}` }];
+    if (corrected) lines.push({ text: `<b>${corrected}</b> already present, payment mode corrected from the file` });
+    if (skipped)   lines.push({ text: `<b>${skipped}</b> skipped as already present`, cls: 'skip' });
+    if (meta.assumed) lines.push({ text: `<b>${meta.assumed}</b> rows said nothing about how they were paid — recorded as UPI. Tap a badge to switch one to cash.`, cls: 'skip' });
     if (rejected.length) lines.push({ text: `<b>${rejected.length}</b> rejected as unreadable`, cls: 'bad' });
-    showReport(added ? 'Import merged' : 'Nothing new to add', lines, rejected, !added);
+    showReport((added || corrected) ? 'Import merged' : 'Nothing new to add',
+      lines, rejected, !(added || corrected));
 
-    toast(added ? `Imported ${added} entries` : 'Every row was already here');
+    toast(added ? `Imported ${added} entries`
+      : corrected ? `Corrected ${corrected} entries`
+      : 'Every row was already here');
   };
   reader.readAsText(file);
 }
 
 function describeReject(raw) {
   if (!raw || typeof raw !== 'object') return 'not a record';
-  if (!normDate(raw.date)) return `unreadable date "${String(raw.date || '').slice(0, 20)}"`;
-  const n = Number(raw.amount);
+  const d = pickField(raw, 'date');
+  if (!normDate(d)) return `unreadable date "${String(d || '').slice(0, 20)}"`;
+  const n = parseMoney(pickField(raw, 'amount'));
   if (!Number.isFinite(n)) return 'unreadable amount';
   if (n <= 0) return 'amount is zero or negative';
   return 'incomplete record';
@@ -1450,13 +1634,216 @@ function showReport(title, lines, detail, warn) {
 
 function undoImport() {
   if (!undoState) return;
-  entries = undoState;
+  entries = undoState.map(tag);
   undoState = null;
   save();
   render();
   $('#undoBtn').hidden = true;
   $('#importReport').hidden = true;
   toast('Import undone');
+}
+
+/* ══════════════════════════════════════════════════════════
+   STATEMENT — one source of styles and markup, used for both
+   the live preview and the downloaded page, so what you see
+   in the preview is exactly what leaves the app.
+   ══════════════════════════════════════════════════════════ */
+const STMT_CSS = `
+.stmt-page{max-width:760px;margin:0 auto;background:#FFFFFF;border:1px solid rgba(0,0,0,.07);
+  border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.10);overflow:hidden;
+  font-family:'Lato',sans-serif;color:#1A1A1A}
+.stmt-head{background:#1C4532;color:#fff;padding:30px 34px 26px}
+.stmt-head h1{font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:700;line-height:1.1}
+.stmt-head .period{font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.1em;
+  text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:6px}
+.stmt-head .issued{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.08em;
+  color:rgba(255,255,255,.4);margin-top:14px}
+.stmt-sum{display:grid;grid-template-columns:repeat(4,1fr);background:#276146}
+.stmt-sum div{padding:16px 10px;text-align:center;border-left:1px solid rgba(255,255,255,.1)}
+.stmt-sum div:first-child{border-left:none}
+.stmt-sum .v{font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:500;color:#fff}
+.stmt-sum .l{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.12em;
+  text-transform:uppercase;color:rgba(255,255,255,.45);margin-top:4px}
+.stmt-sum .cash .v{color:#F5C97A} .stmt-sum .upi .v{color:#7ED4A4}
+.stmt-body{padding:26px 34px 30px}
+.stmt-eyebrow{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.14em;
+  text-transform:uppercase;color:#8A8A8A;margin:0 0 14px}
+.stmt-day{margin-bottom:20px}
+.stmt-day-h{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid #EDE6D6;
+  padding-bottom:5px;margin-bottom:7px}
+.stmt-day-h b{font-family:'Playfair Display',serif;font-size:.95rem;font-weight:600}
+.stmt-day-h span{font-family:'DM Mono',monospace;font-size:.62rem;color:#8A8A8A;
+  letter-spacing:.06em;margin-left:auto}
+.stmt-row{display:flex;align-items:baseline;gap:10px;padding:4px 0;font-size:.86rem}
+.stmt-row .t{font-family:'DM Mono',monospace;font-size:.66rem;color:#8A8A8A;width:44px;flex-shrink:0}
+.stmt-row .d{flex:1;min-width:0}
+.stmt-row .m{font-family:'DM Mono',monospace;font-size:.56rem;letter-spacing:.1em;
+  padding:2px 7px;border-radius:20px;flex-shrink:0}
+.stmt-row .m.cash{background:rgba(201,146,42,.14);color:#9A6E15}
+.stmt-row .m.upi{background:rgba(28,69,50,.1);color:#1C4532}
+.stmt-row .a{font-family:'DM Mono',monospace;font-size:.86rem;color:#C85B3A;
+  min-width:82px;text-align:right;flex-shrink:0}
+.stmt-note{border-top:1px solid #EDE6D6;margin-top:22px;padding-top:14px;
+  font-family:'DM Mono',monospace;font-size:.6rem;line-height:1.8;color:#8A8A8A}
+@media(max-width:520px){
+  .stmt-sum{grid-template-columns:1fr 1fr}
+  .stmt-sum div:nth-child(3){border-left:none}
+  .stmt-head,.stmt-body{padding-left:20px;padding-right:20px}
+  .stmt-row .m{display:none}
+}
+@media print{.stmt-page{box-shadow:none;border:none;border-radius:0;max-width:none}}
+`;
+
+function statementModel() {
+  const rows = visible().slice().sort((a, b) =>
+    a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  const total = rows.reduce((s, e) => s + e.amount, 0);
+  const cash  = rows.filter(e => e.payment === 'cash').reduce((s, e) => s + e.amount, 0);
+  const upi   = total - cash;
+  const days  = [...new Set(rows.map(e => e.date))];
+  return {
+    rows, total, cash, upi, days,
+    from: days[0] || null, to: days[days.length - 1] || null,
+    perDay: days.length ? total / days.length : 0,
+    scope: filter === 'all' ? 'All payment modes' : (filter === 'cash' ? 'Cash only' : 'UPI only')
+  };
+}
+
+function statementMarkup(m) {
+  const fmtDay = iso => {
+    const [y, mo, d] = iso.split('-').map(Number);
+    return new Date(y, mo - 1, d).toLocaleDateString('en-GB',
+      { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  };
+  const span = m.from
+    ? (m.from === m.to ? fmtDay(m.from) : fmtDay(m.from) + ' — ' + fmtDay(m.to))
+    : 'No records';
+
+  let body = '';
+  m.days.forEach(day => {
+    const items = m.rows.filter(e => e.date === day);
+    const sub = items.reduce((s, e) => s + e.amount, 0);
+    body += `<div class="stmt-day"><div class="stmt-day-h">
+      <b>${escapeHtml(fmtDay(day))}</b>
+      <span>${items.length} · ${escapeHtml(money(sub))}</span></div>`;
+    items.forEach(e => {
+      body += `<div class="stmt-row">
+        <span class="t">${escapeHtml(e.time)}</span>
+        <span class="d">${escapeHtml(e.description)}</span>
+        <span class="m ${e.payment}">${e.payment.toUpperCase()}</span>
+        <span class="a">${escapeHtml(money(e.amount))}</span></div>`;
+    });
+    body += `</div>`;
+  });
+  if (!m.rows.length) body = `<p class="stmt-eyebrow">Nothing recorded in this selection.</p>`;
+
+  return `<div class="stmt-head">
+      <h1>Spending Statement</h1>
+      <div class="period">${escapeHtml(span)}</div>
+      <div class="issued">Issued ${escapeHtml(new Date().toLocaleString('en-GB'))} · ${escapeHtml(m.scope)}</div>
+    </div>
+    <div class="stmt-sum">
+      <div><div class="v">${escapeHtml(money(m.total))}</div><div class="l">Total</div></div>
+      <div><div class="v">${m.rows.length}</div><div class="l">Entries</div></div>
+      <div class="cash"><div class="v">${escapeHtml(money(m.cash))}</div><div class="l">Cash</div></div>
+      <div class="upi"><div class="v">${escapeHtml(money(m.upi))}</div><div class="l">UPI</div></div>
+    </div>
+    <div class="stmt-body">
+      <p class="stmt-eyebrow">${m.days.length} day${m.days.length === 1 ? '' : 's'} · ${escapeHtml(money(m.perDay))} average per recorded day</p>
+      ${body}
+      <div class="stmt-note">
+        Prepared from the Spend Ledger at spend.vipulanand.in. Amounts in ${escapeHtml(currency)}.<br>
+        This page carries its own data. Send it to an AI assistant and say <b>g</b> for the analysis described inside it.
+      </div>
+    </div>`;
+}
+
+function openStatement() {
+  const m = statementModel();
+  $('#stmtPage').innerHTML = statementMarkup(m);
+  $('#stmtScope').textContent = m.scope + ' · ' + m.rows.length + ' entries';
+  $('#stmtOverlay').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closeStatement() {
+  $('#stmtOverlay').hidden = true;
+  document.body.style.overflow = '';
+}
+
+/* The analysis brief travels with the file. It is a request to whoever
+   opens it, not a command — an assistant is free to ignore it. */
+const ANALYSIS_BRIEF = `
+ANALYSIS BRIEF — for an AI assistant opening this file
+
+This is a personal daily spending statement. The full dataset is embedded
+below as a JSON block with the id "ledger-data". Each entry has date, time,
+amount, description and payment (cash or upi). Amounts are in the currency
+named in the JSON. This is one person's household spending, shared by them
+deliberately for analysis.
+
+If the person sends this file and says only "g", they are asking for:
+
+  1. Period summary — total, entry count, days covered, average per
+     recorded day, and the cash / UPI split in both amount and count.
+  2. Where the money went — group the descriptions into sensible themes
+     (food, fuel, groceries, household help, health, other). Say plainly
+     which themes you had to guess at.
+  3. Shape of the spending — the largest few entries, any day that stands
+     well above the rest, and whether spending clusters on particular days
+     or times.
+  4. What changed — if the file spans more than one month or week,
+     compare the periods.
+  5. Three observations worth acting on, and one question you would need
+     answered to say anything more useful.
+
+Hold to these: quote figures from the embedded data rather than the
+rendered page, state clearly when the record is too short to support a
+conclusion, and do not infer income, debt or financial health from
+spending alone. Recorded spending is not all spending.
+`;
+
+function downloadStatement() {
+  const m = statementModel();
+  const payload = {
+    meta: {
+      tool: 'Spend Ledger', version: 'v1',
+      generatedAt: new Date().toISOString(),
+      scope: m.scope, from: m.from, to: m.to,
+      count: m.rows.length, total: m.total, cash: m.cash, upi: m.upi
+    },
+    currency,
+    entries: m.rows.map(e => ({
+      date: e.date, time: e.time, amount: e.amount,
+      description: e.description, payment: e.payment, paymentType: e.payment
+    }))
+  };
+  const doc = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spending Statement · ${escapeHtml(m.from || '')}${m.to && m.to !== m.from ? ' to ' + escapeHtml(m.to) : ''}</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#F5F0E8;padding:24px 12px 60px;font-family:'Lato',sans-serif}
+.print-bar{max-width:760px;margin:0 auto 16px;display:flex;justify-content:flex-end;gap:8px}
+.print-bar button{padding:8px 14px;border-radius:6px;border:1px solid #1C4532;background:#1C4532;
+  color:#fff;font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.05em;cursor:pointer}
+@media print{.print-bar{display:none}body{background:#fff;padding:0}}
+${STMT_CSS}
+</style></head>
+<body>
+<div class="print-bar"><button onclick="window.print()">Print / Save as PDF</button></div>
+<div class="stmt-page">${statementMarkup(m)}</div>
+<!--
+${ANALYSIS_BRIEF}
+-->
+<script type="application/json" id="ledger-data">
+${JSON.stringify(payload, null, 2)}
+<\/script>
+</body></html>`;
+  download(new Blob([doc], { type: 'text/html' }),
+    `spending-statement-${m.to || localDate()}.html`);
+  toast('Statement downloaded');
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1498,9 +1885,30 @@ function bind() {
   });
 
   const list = $('#entriesList');
-  list.addEventListener('click', e => {
+  /* Touch, mouse and keyboard all reach this. Listening on one event family
+     only is how a control ends up working on desktop and dead on a phone.
+     The guard stops one physical tap counting as several events. */
+  let lastKey = '', lastAt = 0;
+  const act = e => {
     const del = e.target.closest('[data-delete]');
-    if (del) deleteEntry(Number(del.dataset.delete));
+    const badge = del ? null : e.target.closest('.pay-badge');
+    if (!del && !badge) return false;
+    const row = e.target.closest('.entry-item');
+    if (!row) return false;
+    const key = (del ? 'del:' : 'pay:') + row.dataset.uid;
+    if (key === lastKey && Date.now() - lastAt < 400) return true;   // same gesture
+    lastKey = key; lastAt = Date.now();
+    if (del) deleteEntry(row.dataset.uid);
+    else togglePayment(row.dataset.uid);
+    return true;
+  };
+  const handle = e => { if (act(e)) e.preventDefault(); };
+  list.addEventListener('pointerdown', handle);
+  list.addEventListener('mousedown', handle);
+  list.addEventListener('click', handle);
+  list.addEventListener('keydown', e => {
+    const hit = e.target.closest('[data-delete], .pay-badge');
+    if (hit && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); act(e); }
   });
   list.addEventListener('blur', e => {
     if (e.target.dataset && e.target.dataset.edit) commitEdit(e.target);
@@ -1517,6 +1925,13 @@ function bind() {
   $('#importFileInput').addEventListener('change', e => {
     importFile(e.target.files[0]);
     e.target.value = '';
+  });
+  $('#statementBtn').addEventListener('click', openStatement);
+  $('#stmtClose').addEventListener('click', closeStatement);
+  $('#stmtPrint').addEventListener('click', () => window.print());
+  $('#stmtDownload').addEventListener('click', downloadStatement);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !$('#stmtOverlay').hidden) closeStatement();
   });
   $('#undoBtn').addEventListener('click', undoImport);
   $('#irClose').addEventListener('click', () => { $('#importReport').hidden = true; });
@@ -1545,6 +1960,9 @@ function bind() {
 }
 
 function init() {
+  const st = document.createElement('style');
+  st.textContent = STMT_CSS;
+  document.head.appendChild(st);
   load();
   $('#currency').value = currency;
   $('#date').value = localDate();
